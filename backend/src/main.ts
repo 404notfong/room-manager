@@ -66,27 +66,26 @@ async function bootstrap() {
 
 // Global handler for Vercel
 export default async function handler(req: any, res: any) {
-    if (process.env.VERCEL) {
-        // Manual CORS handling for Vercel edge/preflight
-        res.setHeader('Access-Control-Allow-Credentials', 'true');
-        res.setHeader('Access-Control-Allow-Origin', 'https://nhatroso.vercel.app');
-        res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-        res.setHeader(
-            'Access-Control-Allow-Headers',
-            'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, x-lang'
-        );
+    // Always set CORS headers first (before any other processing)
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Origin', 'https://nhatroso.vercel.app');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT,HEAD');
+    res.setHeader(
+        'Access-Control-Allow-Headers',
+        'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, x-lang'
+    );
 
-        if (req.method === 'OPTIONS') {
-            res.status(200).end();
-            return;
-        }
-
-        if (!appPromise) {
-            appPromise = bootstrap();
-        }
-        await appPromise;
-        server(req, res);
+    // Handle preflight request immediately
+    if (req.method === 'OPTIONS') {
+        res.status(204).end();
+        return;
     }
+
+    if (!appPromise) {
+        appPromise = bootstrap();
+    }
+    await appPromise;
+    server(req, res);
 }
 
 // Start if running locally
