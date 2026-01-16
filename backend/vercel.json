@@ -5,7 +5,7 @@
     ],
     "builds": [
         {
-            "src": "src/vercel.ts",
+            "src": "src/main.ts",
             "use": "@vercel/node",
             "config": {
                 "includeFiles": [
@@ -17,11 +17,11 @@
     "rewrites": [
         {
             "source": "/api/(.*)",
-            "destination": "src/vercel.ts"
+            "destination": "src/main.ts"
         },
         {
             "source": "/(.*)",
-            "destination": "src/vercel.ts"
+            "destination": "src/main.ts"
         }
     ],
     "headers": [
