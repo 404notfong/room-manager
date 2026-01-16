@@ -47,6 +47,21 @@ async function bootstrap() {
 }
 
 export default async function handler(req: any, res: any) {
+    // Manual CORS handling for Vercel
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Origin', 'https://nhatroso.vercel.app');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    res.setHeader(
+        'Access-Control-Allow-Headers',
+        'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, x-lang'
+    );
+
+    // Handle preflight request
+    if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
+    }
+
     if (!appPromise) {
         appPromise = bootstrap();
     }
