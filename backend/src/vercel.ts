@@ -22,8 +22,10 @@ async function bootstrap() {
     app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
 
     app.enableCors({
-        origin: true,
+        origin: ['https://nhatroso.vercel.app', 'http://localhost:5173', 'http://localhost:5174'],
         credentials: true,
+        methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+        allowedHeaders: 'Content-Type,Accept,Authorization,x-lang',
     });
 
     app.setGlobalPrefix('api');
