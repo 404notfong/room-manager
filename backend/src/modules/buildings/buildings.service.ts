@@ -6,7 +6,7 @@ import { Room, RoomDocument } from '../rooms/schemas/room.schema';
 import { RoomGroup, RoomGroupDocument } from '../room-groups/schemas/room-group.schema';
 import { CreateBuildingDto, UpdateBuildingDto } from './dto/building.dto';
 import { BuildingQueryDto } from './dto/building-query.dto';
-import { normalizeString } from '@common/utils/string.util';
+import { normalizeString } from '../../common/utils/string.util';
 
 @Injectable()
 export class BuildingsService {

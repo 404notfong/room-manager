@@ -3,7 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Service, ServiceDocument } from './schemas/service.schema';
 import { CreateServiceDto, UpdateServiceDto, GetServicesDto } from './dto/service.dto';
-import { normalizeString } from '@common/utils/string.util';
+import { normalizeString } from '../../common/utils/string.util';
 
 @Injectable()
 export class ServicesService {

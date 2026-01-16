@@ -1,7 +1,7 @@
 import { IsNotEmpty, IsString, IsOptional, IsEmail, IsDateString, IsEnum, IsMongoId, ValidateNested, IsBoolean, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
-import { TenantStatus } from '@common/constants/enums';
-import { PaginationDto } from '@common/dto/pagination.dto';
+import { TenantStatus } from '../../../common/constants/enums';
+import { PaginationDto } from '../../../common/dto/pagination.dto';
 
 class EmergencyContactDto {
     @IsString()

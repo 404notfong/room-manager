@@ -1,8 +1,8 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Query } from '@nestjs/common';
 import { ContractsService } from './contracts.service';
 import { CreateContractDto, UpdateContractDto, GetContractsDto, ActivateContractDto } from './dto/contract.dto';
-import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
-import { CurrentUser } from '@common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @Controller('contracts')
 @UseGuards(JwtAuthGuard)

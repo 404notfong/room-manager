@@ -3,8 +3,8 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Tenant, TenantDocument } from './schemas/tenant.schema';
 import { CreateTenantDto, UpdateTenantDto, GetTenantsDto } from './dto/tenant.dto';
-import { normalizeString } from '@common/utils/string.util';
-import { TenantStatus } from '@common/constants/enums';
+import { normalizeString } from '../../common/utils/string.util';
+import { TenantStatus } from '../../common/constants/enums';
 
 @Injectable()
 export class TenantsService {

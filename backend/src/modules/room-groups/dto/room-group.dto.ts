@@ -1,5 +1,5 @@
 import { IsString, IsOptional, IsBoolean, IsNumber, MaxLength, IsNotEmpty, IsMongoId, IsEnum } from 'class-validator';
-import { PaginationDto } from '@common/dto/pagination.dto';
+import { PaginationDto } from '../../../common/dto/pagination.dto';
 
 export class CreateRoomGroupDto {
     @IsMongoId()

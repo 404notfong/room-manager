@@ -7,7 +7,7 @@ import { CreateContractDto, UpdateContractDto, GetContractsDto, ActivateContract
 import { RoomsService } from '../rooms/rooms.service';
 import { TenantsService } from '../tenants/tenants.service';
 import { ServicesService } from '../services/services.service';
-import { RoomStatus, RoomType, ShortTermPricingType, TenantStatus, ContractStatus, ContractType } from '@common/constants/enums';
+import { RoomStatus, RoomType, ShortTermPricingType, TenantStatus, ContractStatus, ContractType } from '../../common/constants/enums';
 
 @Injectable()
 export class ContractsService {

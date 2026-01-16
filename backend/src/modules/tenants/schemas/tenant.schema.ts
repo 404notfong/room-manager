@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { TenantStatus } from '@common/constants/enums';
+import { TenantStatus } from '../../../common/constants/enums';
 
 export type TenantDocument = Tenant & Document;
 

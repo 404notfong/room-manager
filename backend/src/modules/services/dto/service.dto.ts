@@ -1,6 +1,6 @@
 import { IsNotEmpty, IsString, IsOptional, IsNumber, IsEnum, IsArray, IsBoolean, ValidateNested, IsMongoId, Min } from 'class-validator';
 import { Type } from 'class-transformer';
-import { PaginationDto } from '@common/dto/pagination.dto';
+import { PaginationDto } from '../../../common/dto/pagination.dto';
 
 class ServicePriceTierDto {
     @IsNumber()

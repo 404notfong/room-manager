@@ -1,6 +1,6 @@
 import { IsNotEmpty, IsMongoId, IsNumber, IsDate, IsEnum, IsOptional, IsString } from 'class-validator';
 import { Type } from 'class-transformer';
-import { PaymentMethod } from '@common/constants/enums';
+import { PaymentMethod } from '../../../common/constants/enums';
 
 export class CreatePaymentDto {
     @IsMongoId()

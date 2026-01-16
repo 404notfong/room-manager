@@ -1,7 +1,7 @@
 import { IsNotEmpty, IsString, IsOptional, IsNumber, IsEnum, IsArray, IsMongoId, ValidateNested, Min } from 'class-validator';
 import { Type } from 'class-transformer';
-import { RoomStatus, RoomType, ShortTermPricingType } from '@common/constants/enums';
-import { PaginationDto } from '@common/dto/pagination.dto';
+import { RoomStatus, RoomType, ShortTermPricingType } from '../../../common/constants/enums';
+import { PaginationDto } from '../../../common/dto/pagination.dto';
 
 // DTO for short-term price tier
 export class ShortTermPriceTierDto {

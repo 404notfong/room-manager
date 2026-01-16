@@ -1,8 +1,8 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
 import { RoomGroupsService } from './room-groups.service';
 import { CreateRoomGroupDto, UpdateRoomGroupDto, GetRoomGroupsDto } from './dto/room-group.dto';
-import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
-import { CurrentUser } from '@common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @Controller('room-groups')
 @UseGuards(JwtAuthGuard)

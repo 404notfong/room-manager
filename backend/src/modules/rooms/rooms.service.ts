@@ -4,7 +4,7 @@ import { Model, Types } from 'mongoose';
 import { Room, RoomDocument } from './schemas/room.schema';
 import { Building, BuildingDocument } from '../buildings/schemas/building.schema';
 import { CreateRoomDto, UpdateRoomDto, UpdateIndexesDto, GetRoomsDto } from './dto/room.dto';
-import { normalizeString } from '@common/utils/string.util';
+import { normalizeString } from '../../common/utils/string.util';
 
 @Injectable()
 export class RoomsService {

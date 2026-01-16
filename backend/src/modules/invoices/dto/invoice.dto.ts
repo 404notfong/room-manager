@@ -1,6 +1,6 @@
 import { IsNotEmpty, IsMongoId, IsNumber, IsDate, IsEnum, IsOptional, IsString, ValidateNested, IsArray } from 'class-validator';
 import { Type } from 'class-transformer';
-import { InvoiceStatus } from '@common/constants/enums';
+import { InvoiceStatus } from '../../../common/constants/enums';
 
 class ServiceChargeDto {
     @IsString()

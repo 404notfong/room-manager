@@ -1,6 +1,6 @@
 import { IsNotEmpty, IsMongoId, IsEnum, IsDate, IsDateString, IsNumber, IsArray, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
-import { ContractType, ContractStatus, PaymentCycle, RoomType, ShortTermPricingType } from '@common/constants/enums';
+import { ContractType, ContractStatus, PaymentCycle, RoomType, ShortTermPricingType } from '../../../common/constants/enums';
 import { CreateTenantDto } from '../../tenants/dto/tenant.dto';
 
 class ServiceChargeDto {
