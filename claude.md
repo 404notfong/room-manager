@@ -454,7 +454,21 @@ docker-compose up -d --build
 - Queries luôn filter `isDeleted: false`
 
 ### 6. ObjectId cho reference fields
-- **BẮT BUỘC**: Khi query database với các trường ID tham chiếu đến record khác (như `ownerId`, `buildingId`, `roomId`, etc.), phải convert string sang `ObjectId`:
+- **BẮT BUỘC - Định nghĩa Schema**: Các trường tham chiếu đến record khác PHẢI được định nghĩa với type `Types.ObjectId` và `ref`:
+  ```typescript
+  // ✅ ĐÚNG - Định nghĩa reference field trong Schema
+  @Prop({ type: Types.ObjectId, ref: 'Building', required: true })
+  buildingId: Types.ObjectId;
+  
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
+  ownerId: Types.ObjectId;
+  
+  // ❌ SAI - Không dùng string cho reference fields
+  @Prop({ type: String })
+  buildingId: string;
+  ```
+
+- **BẮT BUỘC - Query database**: Khi query với các trường reference, phải convert string sang `ObjectId`:
   ```typescript
   // ❌ SAI - so sánh string với ObjectId sẽ không match
   { buildingId: id, ownerId }
@@ -462,6 +476,17 @@ docker-compose up -d --build
   // ✅ ĐÚNG - luôn convert sang ObjectId
   { buildingId: new Types.ObjectId(id), ownerId: new Types.ObjectId(ownerId) }
   ```
+
+- **BẮT BUỘC - Lưu dữ liệu**: Khi tạo/cập nhật record, reference fields phải được lưu dưới dạng ObjectId:
+  ```typescript
+  // ✅ ĐÚNG - Convert trước khi lưu
+  const newRoom = await this.roomModel.create({
+      ...dto,
+      buildingId: new Types.ObjectId(dto.buildingId),
+      ownerId: new Types.ObjectId(ownerId),
+  });
+  ```
+
 - Import `Types` từ mongoose: `import { Types } from 'mongoose';`
 
 ### 7. Table action buttons
@@ -479,6 +504,63 @@ docker-compose up -d --build
           </Button>
       </div>
   </TableCell>
+  ```
+
+### 9. Submit Button Loading
+- **BẮT BUỘC**: Tất cả button submit form PHẢI có loading state khi đang xử lý:
+  ```tsx
+  // ✅ ĐÚNG - Button với loading state
+  <Button type="submit" disabled={isSubmitting}>
+      {isSubmitting ? (
+          <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              {t('common.saving')}
+          </>
+      ) : (
+          t('common.save')
+      )}
+  </Button>
+  
+  // Hoặc sử dụng pattern ngắn gọn
+  <Button type="submit" disabled={isSubmitting}>
+      {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+      {t('common.save')}
+  </Button>
+  ```
+- Import icon: `import { Loader2 } from 'lucide-react';`
+- Sử dụng `isSubmitting` từ react-hook-form hoặc state riêng
+- Button PHẢI `disabled` khi đang loading để tránh double submit
+
+### 10. UI/UX Design System & Responsive
+- **BẮT BUỘC**: Khi tạo mới giao diện, components, buttons, forms... phải tuân theo design system hiện có:
+  - Sử dụng components từ `@/components/ui/` (Button, Input, Dialog, etc.)
+  - Tuân theo color palette: `primary`, `secondary`, `destructive`, `muted`
+  - Sử dụng Tailwind CSS classes đã định nghĩa
+  - Icons từ `lucide-react`
+
+- **BẮT BUỘC**: Responsive cho Mobile và Tablet:
+  - Breakpoints: `sm` (640px), `md` (768px), `lg` (1024px), `xl` (1280px)
+  - Mobile first: viết styles cho mobile trước, sau đó dùng `lg:` cho desktop
+  - Navbar: `h-14` mobile, `h-16` desktop; padding `px-3` mobile, `px-4` desktop
+  - Sidebar: ẩn trên mobile/tablet (`lg:hidden`), hiện dạng overlay khi click menu
+  - Tables: có thể scroll ngang trên mobile, hoặc chuyển sang card view
+  - Forms: full width trên mobile, grid layout trên desktop
+  - Buttons: `h-9` mobile, `h-10` desktop; touch-friendly với min `44px` tap target
+  - Text: `text-sm` mobile, `text-base` desktop cho body text
+
+- **Ví dụ responsive pattern:**
+  ```tsx
+  // ✅ ĐÚNG - Mobile first với responsive
+  <div className="px-3 lg:px-4 py-2 lg:py-3">
+      <h1 className="text-lg lg:text-xl font-semibold">Title</h1>
+      <Button className="h-9 lg:h-10 w-full lg:w-auto">Action</Button>
+  </div>
+  
+  // ❌ SAI - Không responsive
+  <div className="px-4 py-3">
+      <h1 className="text-xl font-semibold">Title</h1>
+      <Button className="h-10">Action</Button>
+  </div>
   ```
 
 ---

@@ -89,6 +89,9 @@ export default function RegisterPage() {
 
             <Card className="w-full max-w-md">
                 <CardHeader className="space-y-1">
+                    <div className="flex justify-center mb-4">
+                        <img src="/logo.png" alt="Nhà Trọ Số" className="h-16 w-16" />
+                    </div>
                     <CardTitle className="text-2xl font-bold text-center">
                         {t('auth.registerTitle')}
                     </CardTitle>

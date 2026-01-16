@@ -113,7 +113,7 @@ export default function BuildingSelector({ value, onSelect, showAllOption = true
 
     return (
         <div className="flex items-center gap-2">
-            {!onSelect && <Building2 className="h-4 w-4 text-muted-foreground" />}
+            {!onSelect && <Building2 className="hidden lg:block h-4 w-4 text-muted-foreground" />}
             <Popover open={open} onOpenChange={handleOpenChange} modal={true}>
                 <PopoverTrigger asChild>
                     <Button
@@ -122,20 +122,20 @@ export default function BuildingSelector({ value, onSelect, showAllOption = true
                         aria-expanded={open}
                         className={cn(
                             "h-9 justify-between font-normal px-3",
-                            onSelect ? "w-full" : "w-[200px]",
+                            onSelect ? "w-full" : "w-auto max-w-[140px] lg:max-w-[200px] lg:w-[200px]",
                             error && "border-destructive focus-visible:ring-destructive"
                         )}
                         disabled={disabled}
                     >
-                        <span className="truncate">
+                        <span className="truncate text-xs lg:text-sm">
                             {selectedBuildingId
                                 ? selectedBuilding?.name || t('common.loading')
                                 : (showAllOption ? t('common.allBuildings') : t('buildings.select'))}
                         </span>
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        <ChevronsUpDown className="ml-1 lg:ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                 </PopoverTrigger>
-                <PopoverContent className={cn("p-0", onSelect ? "w-[--radix-popover-trigger-width]" : "w-[200px]")} align="start">
+                <PopoverContent className={cn("p-0", onSelect ? "w-[--radix-popover-trigger-width]" : "w-[200px]")} align="end">
                     <Command shouldFilter={false}>
                         <CommandInput
                             placeholder={t('common.search')}
