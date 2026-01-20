@@ -32,6 +32,8 @@ import { formatCellValue } from '@/utils/tableUtils';
 import RoomForm, { RoomFormData } from '@/components/forms/RoomForm';
 import { PriceTablePopover } from '@/components/PriceTablePopover';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useColumnVisibility, ColumnConfig } from '@/hooks/useColumnVisibility';
+import { ColumnVisibilityToggle } from '@/components/ColumnVisibilityToggle';
 
 interface ShortTermPriceTier {
     fromValue: number;
@@ -115,6 +117,18 @@ export default function RoomsPage() {
     const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
+
+    // Column visibility configuration
+    const columnConfig: ColumnConfig[] = [
+        { id: 'roomName', label: t('rooms.roomName') },
+        { id: 'roomCode', label: t('rooms.roomCode') },
+        { id: 'building', label: t('rooms.building') },
+        { id: 'roomType', label: t('rooms.roomType') },
+        { id: 'floor', label: t('rooms.floor') },
+        { id: 'price', label: t('rooms.defaultRoomPrice') },
+        { id: 'status', label: t('common.status') },
+    ];
+    const columnVisibility = useColumnVisibility('rooms', columnConfig);
 
     const { data: roomsData, isLoading } = useQuery({
         queryKey: ['rooms', { page: currentPage, limit: pageSize, search: debouncedSearchTerm, buildingId: selectedBuildingId }],
@@ -409,14 +423,17 @@ export default function RoomsPage() {
 
             {/* Table */}
             <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <DoorOpen className="h-5 w-5" />
-                        {t('rooms.list')}
-                    </CardTitle>
-                    <CardDescription>
-                        {t('rooms.totalCount', { count: meta.total })}
-                    </CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                    <div>
+                        <CardTitle className="flex items-center gap-2">
+                            <DoorOpen className="h-5 w-5" />
+                            {t('rooms.list')}
+                        </CardTitle>
+                        <CardDescription>
+                            {t('rooms.totalCount', { count: meta.total })}
+                        </CardDescription>
+                    </div>
+                    <ColumnVisibilityToggle {...columnVisibility} />
                 </CardHeader>
                 <CardContent>
                     {isLoading ? (
@@ -427,26 +444,26 @@ export default function RoomsPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>{t('rooms.roomName')}</TableHead>
-                                    <TableHead>{t('rooms.roomCode')}</TableHead>
-                                    <TableHead>{t('rooms.building')}</TableHead>
-                                    <TableHead className="text-center">{t('rooms.roomType')}</TableHead>
-                                    <TableHead className="text-center">{t('rooms.floor')}</TableHead>
-                                    <TableHead className="text-right">{t('rooms.defaultRoomPrice')}</TableHead>
-                                    <TableHead className="text-center">{t('common.status')}</TableHead>
+                                    {columnVisibility.isVisible('roomName') && <TableHead>{t('rooms.roomName')}</TableHead>}
+                                    {columnVisibility.isVisible('roomCode') && <TableHead>{t('rooms.roomCode')}</TableHead>}
+                                    {columnVisibility.isVisible('building') && <TableHead>{t('rooms.building')}</TableHead>}
+                                    {columnVisibility.isVisible('roomType') && <TableHead className="text-center">{t('rooms.roomType')}</TableHead>}
+                                    {columnVisibility.isVisible('floor') && <TableHead className="text-center">{t('rooms.floor')}</TableHead>}
+                                    {columnVisibility.isVisible('price') && <TableHead className="text-right">{t('rooms.defaultRoomPrice')}</TableHead>}
+                                    {columnVisibility.isVisible('status') && <TableHead className="text-center">{t('common.status')}</TableHead>}
                                     <TableHead className="w-[70px]"></TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {rooms.map((room) => (
                                     <TableRow key={room._id}>
-                                        <TableCell className="font-medium">{formatCellValue(room.roomName)}</TableCell>
-                                        <TableCell className="font-mono text-muted-foreground">{formatCellValue(room.roomCode)}</TableCell>
-                                        <TableCell>{formatCellValue(room.buildingId?.name)}</TableCell>
-                                        <TableCell className="text-center">{getRoomTypeBadge(room.roomType)}</TableCell>
-                                        <TableCell className="text-center">{formatCellValue(room.floor)}</TableCell>
-                                        <TableCell className="text-right">{getDisplayPrice(room)}</TableCell>
-                                        <TableCell className="text-center">{getStatusBadge(room)}</TableCell>
+                                        {columnVisibility.isVisible('roomName') && <TableCell className="font-medium">{formatCellValue(room.roomName)}</TableCell>}
+                                        {columnVisibility.isVisible('roomCode') && <TableCell className="font-mono text-muted-foreground">{formatCellValue(room.roomCode)}</TableCell>}
+                                        {columnVisibility.isVisible('building') && <TableCell>{formatCellValue(room.buildingId?.name)}</TableCell>}
+                                        {columnVisibility.isVisible('roomType') && <TableCell className="text-center">{getRoomTypeBadge(room.roomType)}</TableCell>}
+                                        {columnVisibility.isVisible('floor') && <TableCell className="text-center">{formatCellValue(room.floor)}</TableCell>}
+                                        {columnVisibility.isVisible('price') && <TableCell className="text-right">{getDisplayPrice(room)}</TableCell>}
+                                        {columnVisibility.isVisible('status') && <TableCell className="text-center">{getStatusBadge(room)}</TableCell>}
                                         <TableCell>
                                             <div className="flex items-center gap-1">
                                                 <Button variant="ghost" size="icon" onClick={() => handleEdit(room)}>

@@ -77,3 +77,8 @@ TenantSchema.index({ ownerId: 1, isDeleted: 1 });
 TenantSchema.index({ idCard: 1 });
 TenantSchema.index({ phone: 1 });
 TenantSchema.index({ currentRoomId: 1, status: 1 });
+
+// Compound unique indexes - phone and idCard must be unique per owner
+TenantSchema.index({ ownerId: 1, phone: 1, isDeleted: 1 }, { unique: true, partialFilterExpression: { isDeleted: false } });
+TenantSchema.index({ ownerId: 1, idCard: 1, isDeleted: 1 }, { unique: true, partialFilterExpression: { isDeleted: false } });
+

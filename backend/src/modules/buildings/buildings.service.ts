@@ -6,7 +6,7 @@ import { Room, RoomDocument } from '@modules/rooms/schemas/room.schema';
 import { RoomGroup, RoomGroupDocument } from '@modules/room-groups/schemas/room-group.schema';
 import { CreateBuildingDto, UpdateBuildingDto } from '@modules/buildings/dto/building.dto';
 import { BuildingQueryDto } from '@modules/buildings/dto/building-query.dto';
-import { normalizeString } from '@common/utils/string.util';
+import { normalizeString, escapeRegExp } from '@common/utils/string.util';
 
 @Injectable()
 export class BuildingsService {
@@ -59,20 +59,23 @@ export class BuildingsService {
         };
 
         if (search) {
+            const escapedSearch = escapeRegExp(search);
             const normalizedSearch = normalizeString(search);
+            const escapedNormalizedSearch = escapeRegExp(normalizedSearch);
             // Search by code OR normalized name (covers fuzzy name search)
-            if (normalizedSearch) {
-                const searchRegex = new RegExp(normalizedSearch, 'i');
+            if (escapedNormalizedSearch) {
+                const searchRegex = new RegExp(escapedNormalizedSearch, 'i');
+                const rawSearchRegex = new RegExp(escapedSearch, 'i');
                 filter.$or = [
                     { nameNormalized: searchRegex },
-                    { code: new RegExp(search, 'i') },
-                    { 'address.street': new RegExp(search, 'i') },
-                    { 'address.ward': new RegExp(search, 'i') },
-                    { 'address.district': new RegExp(search, 'i') },
-                    { 'address.city': new RegExp(search, 'i') },
+                    { code: rawSearchRegex },
+                    { 'address.street': rawSearchRegex },
+                    { 'address.ward': rawSearchRegex },
+                    { 'address.district': rawSearchRegex },
+                    { 'address.city': rawSearchRegex },
                 ];
             } else {
-                const searchRegex = new RegExp(search, 'i');
+                const searchRegex = new RegExp(escapedSearch, 'i');
                 filter.$or = [
                     { name: searchRegex },
                     { code: searchRegex },

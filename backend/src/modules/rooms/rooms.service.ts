@@ -4,7 +4,7 @@ import { Model, Types } from 'mongoose';
 import { Room, RoomDocument } from '@modules/rooms/schemas/room.schema';
 import { Building, BuildingDocument } from '@modules/buildings/schemas/building.schema';
 import { CreateRoomDto, UpdateRoomDto, UpdateIndexesDto, GetRoomsDto } from '@modules/rooms/dto/room.dto';
-import { normalizeString } from '@common/utils/string.util';
+import { normalizeString, escapeRegExp } from '@common/utils/string.util';
 
 @Injectable()
 export class RoomsService {
@@ -81,18 +81,22 @@ export class RoomsService {
         }
 
         if (search) {
+            const escapedSearch = escapeRegExp(search);
             const normalizedSearch = normalizeString(search);
-            if (normalizedSearch) {
-                const searchRegex = new RegExp(normalizedSearch, 'i');
+            const escapedNormalizedSearch = escapeRegExp(normalizedSearch);
+            if (escapedNormalizedSearch) {
+                const searchRegex = new RegExp(escapedNormalizedSearch, 'i');
+                const rawSearchRegex = new RegExp(escapedSearch, 'i');
                 filter.$or = [
                     { nameNormalized: searchRegex },
-                    { roomCode: new RegExp(search, 'i') },
-                    { roomName: new RegExp(search, 'i') }
+                    { roomCode: rawSearchRegex },
+                    { roomName: rawSearchRegex }
                 ];
             } else {
+                const searchRegex = new RegExp(escapedSearch, 'i');
                 filter.$or = [
-                    { roomName: { $regex: search, $options: 'i' } },
-                    { roomCode: { $regex: search, $options: 'i' } }
+                    { roomName: searchRegex },
+                    { roomCode: searchRegex }
                 ];
             }
         }
@@ -196,9 +200,10 @@ export class RoomsService {
             await building.save();
         }
     }
+
     async updateStatus(id: string, ownerId: string, status: string): Promise<void> {
         await this.roomModel.updateOne(
-            { _id: id, ownerId: new Types.ObjectId(ownerId) },
+            { _id: new Types.ObjectId(id), ownerId: new Types.ObjectId(ownerId), isDeleted: false },
             { $set: { status } }
         ).exec();
     }

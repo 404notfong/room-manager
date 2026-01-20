@@ -29,6 +29,8 @@ import Pagination from '@/components/Pagination';
 import ServiceForm, { ServiceFormData } from '@/components/forms/ServiceForm';
 import { PriceTablePopover } from '@/components/PriceTablePopover';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useColumnVisibility, ColumnConfig } from '@/hooks/useColumnVisibility';
+import { ColumnVisibilityToggle } from '@/components/ColumnVisibilityToggle';
 
 interface PriceTier {
     fromValue: number;
@@ -80,6 +82,17 @@ export default function ServicesPage() {
     const [selectedService, setSelectedService] = useState<Service | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
+
+    // Column visibility configuration
+    const columnConfig: ColumnConfig[] = [
+        { id: 'name', label: t('services.name') },
+        { id: 'code', label: t('services.code') },
+        { id: 'unit', label: t('services.unit') },
+        { id: 'price', label: t('services.price') },
+        { id: 'scope', label: t('services.scope') },
+        { id: 'status', label: t('common.status') },
+    ];
+    const columnVisibility = useColumnVisibility('services', columnConfig);
 
     const { data: servicesData, isLoading } = useQuery({
         queryKey: ['services', { page: currentPage, limit: pageSize, search: debouncedSearchTerm }],
@@ -218,14 +231,17 @@ export default function ServicesPage() {
 
             {/* Table */}
             <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Wrench className="h-5 w-5" />
-                        {t('services.list')}
-                    </CardTitle>
-                    <CardDescription>
-                        {t('services.totalCount', { count: meta.total })}
-                    </CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                    <div>
+                        <CardTitle className="flex items-center gap-2">
+                            <Wrench className="h-5 w-5" />
+                            {t('services.list')}
+                        </CardTitle>
+                        <CardDescription>
+                            {t('services.totalCount', { count: meta.total })}
+                        </CardDescription>
+                    </div>
+                    <ColumnVisibilityToggle {...columnVisibility} />
                 </CardHeader>
                 <CardContent>
                     {isLoading ? (
@@ -236,60 +252,66 @@ export default function ServicesPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>{t('services.name')}</TableHead>
-                                    <TableHead>{t('services.code')}</TableHead>
-                                    <TableHead>{t('services.unit')}</TableHead>
-                                    <TableHead className="text-right">{t('services.price')}</TableHead>
-                                    <TableHead>{t('services.scope')}</TableHead>
-                                    <TableHead className="text-center">{t('common.status')}</TableHead>
+                                    {columnVisibility.isVisible('name') && <TableHead>{t('services.name')}</TableHead>}
+                                    {columnVisibility.isVisible('code') && <TableHead>{t('services.code')}</TableHead>}
+                                    {columnVisibility.isVisible('unit') && <TableHead>{t('services.unit')}</TableHead>}
+                                    {columnVisibility.isVisible('price') && <TableHead className="text-right">{t('services.price')}</TableHead>}
+                                    {columnVisibility.isVisible('scope') && <TableHead>{t('services.scope')}</TableHead>}
+                                    {columnVisibility.isVisible('status') && <TableHead className="text-center">{t('common.status')}</TableHead>}
                                     <TableHead className="w-[70px]"></TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {services.map((service: Service) => (
                                     <TableRow key={service._id}>
-                                        <TableCell className="font-medium">{service.name}</TableCell>
-                                        <TableCell className="font-mono text-sm">{service.code}</TableCell>
-                                        <TableCell>{service.unit}</TableCell>
-                                        <TableCell className="text-right">
-                                            {service.priceType === 'FIXED' ? (
-                                                formatPrice(service.fixedPrice)
-                                            ) : (
-                                                <PriceTablePopover
-                                                    shortTermPrices={service.priceTiers}
-                                                    unitLabel={service.unit}
-                                                />
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            {service.buildingScope === 'ALL' ? (
-                                                <Badge variant="secondary">{t('services.allBuildings')}</Badge>
-                                            ) : (
-                                                <div className="flex flex-wrap gap-1">
-                                                    {service.buildingIds?.length > 0 ? (
-                                                        <>
-                                                            {service.buildingIds.slice(0, 3).map((b) => (
-                                                                <Badge key={typeof b === 'string' ? b : b._id} variant="outline" className="font-normal">
-                                                                    {getBuildingName(b)}
-                                                                </Badge>
-                                                            ))}
-                                                            {service.buildingIds.length > 3 && (
-                                                                <Badge variant="secondary" className="font-normal text-xs">
-                                                                    +{service.buildingIds.length - 3}
-                                                                </Badge>
-                                                            )}
-                                                        </>
-                                                    ) : (
-                                                        <span className="text-muted-foreground text-sm">{t('services.noBuildings')}</span>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="text-center">
-                                            <Badge variant={service.isActive ? 'default' : 'secondary'}>
-                                                {service.isActive ? t('common.active') : t('common.inactive')}
-                                            </Badge>
-                                        </TableCell>
+                                        {columnVisibility.isVisible('name') && <TableCell className="font-medium">{service.name}</TableCell>}
+                                        {columnVisibility.isVisible('code') && <TableCell className="font-mono text-sm">{service.code}</TableCell>}
+                                        {columnVisibility.isVisible('unit') && <TableCell>{service.unit}</TableCell>}
+                                        {columnVisibility.isVisible('price') && (
+                                            <TableCell className="text-right">
+                                                {service.priceType === 'FIXED' ? (
+                                                    formatPrice(service.fixedPrice)
+                                                ) : (
+                                                    <PriceTablePopover
+                                                        shortTermPrices={service.priceTiers}
+                                                        unitLabel={service.unit}
+                                                    />
+                                                )}
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('scope') && (
+                                            <TableCell>
+                                                {service.buildingScope === 'ALL' ? (
+                                                    <Badge variant="secondary">{t('services.allBuildings')}</Badge>
+                                                ) : (
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {service.buildingIds?.length > 0 ? (
+                                                            <>
+                                                                {service.buildingIds.slice(0, 3).map((b) => (
+                                                                    <Badge key={typeof b === 'string' ? b : b._id} variant="outline" className="font-normal">
+                                                                        {getBuildingName(b)}
+                                                                    </Badge>
+                                                                ))}
+                                                                {service.buildingIds.length > 3 && (
+                                                                    <Badge variant="secondary" className="font-normal text-xs">
+                                                                        +{service.buildingIds.length - 3}
+                                                                    </Badge>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <span className="text-muted-foreground text-sm">{t('services.noBuildings')}</span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('status') && (
+                                            <TableCell className="text-center">
+                                                <Badge variant={service.isActive ? 'default' : 'secondary'}>
+                                                    {service.isActive ? t('common.active') : t('common.inactive')}
+                                                </Badge>
+                                            </TableCell>
+                                        )}
                                         <TableCell>
                                             <div className="flex items-center gap-1">
                                                 <Button variant="ghost" size="icon" onClick={() => handleEdit(service)}>

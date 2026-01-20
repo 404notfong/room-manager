@@ -27,7 +27,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
                 ? exception.getStatus()
                 : HttpStatus.INTERNAL_SERVER_ERROR;
 
-        const responseBody = {
+        const responseBody: any = {
             statusCode: httpStatus,
             timestamp: new Date().toISOString(),
             path: httpAdapter.getRequestUrl(request),
@@ -36,10 +36,27 @@ export class AllExceptionsFilter implements ExceptionFilter {
             error: (exception as any)?.response?.error || (exception as Error).name || 'Error',
         };
 
+        // If it's a validation error, try to extract detailed errors
+        if ((exception as any)?.errors) {
+            responseBody.errors = (exception as any).errors;
+        } else if ((exception as any)?.response?.errors) {
+            responseBody.errors = (exception as any).response.errors;
+        }
+
         // Log the error
+        const scrubSensitiveData = (data: any) => {
+            if (!data || typeof data !== 'object') return data;
+            const scrubbed = { ...data };
+            const sensitiveKeys = ['password', 'refreshToken', 'currentPassword', 'newPassword'];
+            for (const key of sensitiveKeys) {
+                if (key in scrubbed) scrubbed[key] = '***';
+            }
+            return scrubbed;
+        };
+
         const logData = {
             ...responseBody,
-            body: request.body,
+            body: scrubSensitiveData(request.body),
             query: request.query,
             params: request.params,
         };
@@ -47,11 +64,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
         if (httpStatus >= 500) {
             this.logger.error(
                 `${request.method} ${request.url} - Error: ${JSON.stringify(logData)}`,
-                (exception as Error).stack,
+                (exception as Error),
             );
         } else {
             this.logger.warn(
-                `${request.method} ${request.url} - Status: ${httpStatus} - Message: ${JSON.stringify(responseBody.message)}`,
+                `${request.method} ${request.url} - Status: ${httpStatus} - Message: ${JSON.stringify(responseBody)}`,
             );
         }
 

@@ -73,8 +73,17 @@ export class AuthService {
         };
     }
 
-    async refreshTokens(userId: string, refreshToken: string) {
-        const user = await this.usersService.findOneDocument(userId);
+    async refreshTokens(refreshToken: string) {
+        let payload: any;
+        try {
+            payload = await this.jwtService.verifyAsync(refreshToken, {
+                secret: this.configService.get<string>('REFRESH_TOKEN_SECRET'),
+            });
+        } catch (e) {
+            throw new UnauthorizedException('Access denied');
+        }
+
+        const user = await this.usersService.findOneDocument(payload.userId);
 
         if (!user || !user.refreshToken) {
             throw new UnauthorizedException('Access denied');

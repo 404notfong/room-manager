@@ -8,6 +8,7 @@ import { RoomsService } from '@modules/rooms/rooms.service';
 import { TenantsService } from '@modules/tenants/tenants.service';
 import { ServicesService } from '@modules/services/services.service';
 import { RoomStatus, RoomType, ShortTermPricingType, TenantStatus, ContractStatus, ContractType } from '@common/constants/enums';
+import { normalizeString, escapeRegExp } from '@common/utils/string.util';
 
 @Injectable()
 export class ContractsService {
@@ -30,13 +31,14 @@ export class ContractsService {
         return `HD-${timestamp}-${random}`;
     }
 
-    async validateCreateContract(ownerId: string, dto: CreateContractDto) {
-        this.logger.log(`Validating contract creation for room: ${dto.roomId}`);
+    async validateCreateContract(ownerId: string, dto: CreateContractDto, isUpdate = false) {
+        this.logger.log(`Validating contract ${isUpdate ? 'update' : 'creation'} for room: ${dto.roomId}`);
+
         // 1. Building/Room Validation
         const room = await this.roomsService.findOne(dto.roomId, ownerId);
         if (!room) throw new NotFoundException('Room not found or access denied');
 
-        // 2. Tenant Validation
+        // 2. Tenant Validation (skip status check for updates since tenant is already DEPOSITED/RENTING)
         if (!dto.tenantId && !dto.newTenant) {
             throw new BadRequestException('Either an existing tenant or a new tenant must be provided');
         }
@@ -44,7 +46,9 @@ export class ContractsService {
             this.logger.log(`Validating existing tenant: ${dto.tenantId}`);
             const tenant = await this.tenantsService.findOne(dto.tenantId, ownerId);
             if (!tenant) throw new NotFoundException('Tenant not found or access denied');
-            if (tenant.status !== TenantStatus.ACTIVE) {
+            // Only check ACTIVE status for new contracts, not updates
+            if (!isUpdate && tenant.status !== TenantStatus.ACTIVE) {
+                this.logger.warn(`Tenant ${dto.tenantId} status check failed: ${tenant.status} (isUpdate: ${isUpdate})`);
                 throw new BadRequestException(`Tenant must be in ACTIVE status to create a contract. Current status: ${tenant.status}`);
             }
         } else if (dto.newTenant) {
@@ -57,6 +61,7 @@ export class ContractsService {
         // 3. Pricing Configuration Validation
         const roomType = dto.roomType || RoomType.LONG_TERM;
         this.logger.log(`Validating pricing configuration for type: ${roomType}`);
+
         if (roomType === RoomType.LONG_TERM) {
             if (dto.rentPrice === undefined || dto.rentPrice < 0) throw new BadRequestException('Rent price is required for long term');
             if (dto.electricityPrice === undefined) throw new BadRequestException('Electricity price is required');
@@ -73,6 +78,7 @@ export class ContractsService {
                     throw new BadRequestException('Price per hour is required');
                 }
             } else if (dto.shortTermPricingType === ShortTermPricingType.FIXED) {
+                this.logger.log(`Validating FIXED short term pricing: fixedPrice=${dto.fixedPrice}`);
                 if (!dto.fixedPrice || dto.fixedPrice <= 0) throw new BadRequestException('Fixed price is required');
             }
 
@@ -97,7 +103,7 @@ export class ContractsService {
                 });
 
                 const lastTier = dto.shortTermPrices[dto.shortTermPrices.length - 1];
-                if (lastTier.toValue !== -1) {
+                if (!lastTier || lastTier.toValue !== -1) {
                     throw new BadRequestException('The last price tier must end with -1 (infinity)');
                 }
             }
@@ -106,8 +112,10 @@ export class ContractsService {
         // 4. Mandatory Fields
         this.logger.log('Validating mandatory fields (deposit, start date)');
         if (dto.depositAmount === undefined || dto.depositAmount < 0) throw new BadRequestException('Deposit amount is required');
-        if (!dto.startDate) throw new BadRequestException('Start date is required');
-
+        if (!dto.startDate) {
+            this.logger.warn(`Start date check failed: ${dto.startDate}`);
+            throw new BadRequestException('Start date is required');
+        }
         // 5. Service Charge Validation
         if (dto.serviceCharges && dto.serviceCharges.length > 0) {
             this.logger.log(`Validating ${dto.serviceCharges.length} service charges`);
@@ -262,13 +270,14 @@ export class ContractsService {
 
         // Search Filter
         if (search) {
+            const escapedSearch = escapeRegExp(search);
             pipeline.push({
                 $match: {
                     $or: [
-                        { contractCode: { $regex: search, $options: 'i' } },
-                        { 'tenantId.fullName': { $regex: search, $options: 'i' } },
-                        { 'roomId.roomName': { $regex: search, $options: 'i' } },
-                        { 'roomId.roomCode': { $regex: search, $options: 'i' } }
+                        { contractCode: { $regex: escapedSearch, $options: 'i' } },
+                        { 'tenantId.fullName': { $regex: escapedSearch, $options: 'i' } },
+                        { 'roomId.roomName': { $regex: escapedSearch, $options: 'i' } },
+                        { 'roomId.roomCode': { $regex: escapedSearch, $options: 'i' } }
                     ]
                 }
             });
@@ -315,19 +324,90 @@ export class ContractsService {
     }
 
     async update(id: string, ownerId: string, updateContractDto: UpdateContractDto): Promise<Contract> {
-        const updateData: any = { ...updateContractDto };
-        if (updateData.roomId) updateData.roomId = new Types.ObjectId(updateData.roomId);
-        if (updateData.tenantId) updateData.tenantId = new Types.ObjectId(updateData.tenantId);
+        // Find existing contract
+        const existingContract = await this.contractModel.findOne({
+            _id: new Types.ObjectId(id),
+            ownerId: new Types.ObjectId(ownerId),
+            isDeleted: false
+        }).exec();
+        if (!existingContract) throw new NotFoundException('Contract not found');
 
-        // Sync contractType if roomType changed but contractType didn't
+        // Only DRAFT contracts can be edited
+        if (existingContract.status !== ContractStatus.DRAFT) {
+            throw new BadRequestException('Only draft contracts can be edited');
+        }
+
+        // Note: roomId and tenantId are not in UpdateContractDto, so they cannot be changed
+
+        // Validate like create contract (reuse validation logic)
+        const resolvedRoomType = updateContractDto.roomType || existingContract.roomType || (existingContract.contractType as unknown as RoomType);
+
+        this.logger.log(`Constructing validation DTO for contract update: ${id}`);
+        const validationDto: CreateContractDto = {
+            roomId: existingContract.roomId.toString(),
+            tenantId: existingContract.tenantId.toString(),
+            roomType: resolvedRoomType,
+            startDate: updateContractDto.startDate ? new Date(updateContractDto.startDate as any) : existingContract.startDate,
+            endDate: (updateContractDto.endDate as any === null || updateContractDto.endDate as any === '')
+                ? undefined
+                : (updateContractDto.endDate ? new Date(updateContractDto.endDate as any) : existingContract.endDate),
+            depositAmount: updateContractDto.depositAmount ?? existingContract.depositAmount,
+            rentPrice: updateContractDto.rentPrice ?? existingContract.rentPrice,
+            electricityPrice: updateContractDto.electricityPrice ?? existingContract.electricityPrice,
+            waterPrice: updateContractDto.waterPrice ?? existingContract.waterPrice,
+            paymentCycle: updateContractDto.paymentCycle || existingContract.paymentCycle,
+            paymentCycleMonths: updateContractDto.paymentCycleMonths ?? existingContract.paymentCycleMonths,
+            paymentDueDay: updateContractDto.paymentDueDay ?? existingContract.paymentDueDay,
+            initialElectricIndex: updateContractDto.initialElectricIndex ?? existingContract.initialElectricIndex,
+            initialWaterIndex: updateContractDto.initialWaterIndex ?? existingContract.initialWaterIndex,
+            serviceCharges: updateContractDto.serviceCharges ?? existingContract.serviceCharges,
+            shortTermPricingType: updateContractDto.shortTermPricingType || existingContract.shortTermPricingType,
+            hourlyPricingMode: updateContractDto.hourlyPricingMode || existingContract.hourlyPricingMode,
+            pricePerHour: updateContractDto.pricePerHour ?? existingContract.pricePerHour,
+            fixedPrice: updateContractDto.fixedPrice ?? existingContract.fixedPrice,
+            shortTermPrices: updateContractDto.shortTermPrices ?? existingContract.shortTermPrices,
+        };
+        this.logger.log(`Validation DTO: ${JSON.stringify(validationDto)}`);
+        await this.validateCreateContract(ownerId, validationDto, true); // isUpdate = true to skip tenant status check
+
+        // Prepare update data
+        const updateData: any = { ...updateContractDto };
+
+        // Ensure we don't overwrite immutable IDs through update
+        delete updateData.roomId;
+        delete updateData.tenantId;
+        delete updateData.buildingId;
+
+        // Sync contractType if roomType changed
         if (updateData.roomType && !updateData.contractType) {
             updateData.contractType = updateData.roomType;
         }
 
+        // Check if we're activating the contract
+        const isActivating = updateContractDto.status === ContractStatus.ACTIVE;
+
         const contract = await this.contractModel
-            .findOneAndUpdate({ _id: new Types.ObjectId(id), ownerId: new Types.ObjectId(ownerId), isDeleted: false }, { $set: updateData }, { new: true })
+            .findOneAndUpdate(
+                { _id: new Types.ObjectId(id), ownerId: new Types.ObjectId(ownerId), isDeleted: false },
+                { $set: updateData },
+                { new: true }
+            )
             .exec();
         if (!contract) throw new NotFoundException('Contract not found');
+
+        // If activating from DRAFT -> ACTIVE, update room and tenant status
+        if (isActivating) {
+            this.logger.log(`Activating contract ${contract.contractCode} from DRAFT to ACTIVE`);
+
+            await this.roomsService.updateStatus(contract.roomId.toString(), ownerId, RoomStatus.OCCUPIED);
+
+            await this.tenantsService.update(contract.tenantId.toString(), ownerId, {
+                status: TenantStatus.RENTING,
+                currentRoomId: contract.roomId.toString(),
+                moveInDate: contract.startDate?.toISOString()
+            }, true);
+        }
+
         return contract;
     }
 

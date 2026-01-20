@@ -59,6 +59,6 @@ export class Service {
 
 export const ServiceSchema = SchemaFactory.createForClass(Service);
 
-ServiceSchema.index({ ownerId: 1, isDeleted: 1 });
+ServiceSchema.index({ ownerId: 1, isDeleted: 1, isActive: 1 });
 ServiceSchema.index({ code: 1 });
 ServiceSchema.index({ buildingIds: 1 });

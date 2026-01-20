@@ -1,9 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Tenant, TenantDocument } from '@modules/tenants/schemas/tenant.schema';
 import { CreateTenantDto, UpdateTenantDto, GetTenantsDto } from '@modules/tenants/dto/tenant.dto';
-import { normalizeString } from '@common/utils/string.util';
+import { normalizeString, escapeRegExp } from '@common/utils/string.util';
 import { TenantStatus } from '@common/constants/enums';
 
 @Injectable()
@@ -23,6 +23,26 @@ export class TenantsService {
     async create(ownerId: string, createTenantDto: CreateTenantDto): Promise<Tenant> {
         if (createTenantDto.status === TenantStatus.RENTING) {
             throw new ForbiddenException('Cannot manually set status to RENTING');
+        }
+
+        // Check for duplicate phone
+        const existingPhone = await this.tenantModel.findOne({
+            ownerId: new Types.ObjectId(ownerId),
+            phone: createTenantDto.phone,
+            isDeleted: false
+        }).exec();
+        if (existingPhone) {
+            throw new ConflictException('PHONE_EXISTS');
+        }
+
+        // Check for duplicate idCard
+        const existingIdCard = await this.tenantModel.findOne({
+            ownerId: new Types.ObjectId(ownerId),
+            idCard: createTenantDto.idCard,
+            isDeleted: false
+        }).exec();
+        if (existingIdCard) {
+            throw new ConflictException('ID_CARD_EXISTS');
         }
 
         let code = this.generateCode();
@@ -58,19 +78,22 @@ export class TenantsService {
         }
 
         if (search) {
+            const escapedSearch = escapeRegExp(search);
             const normalizedSearch = normalizeString(search);
-            if (normalizedSearch) {
-                const searchRegex = new RegExp(normalizedSearch, 'i');
+            const escapedNormalizedSearch = escapeRegExp(normalizedSearch);
+            if (escapedNormalizedSearch) {
+                const searchRegex = new RegExp(escapedNormalizedSearch, 'i');
+                const rawSearchRegex = new RegExp(escapedSearch, 'i');
                 filter.$or = [
                     { fullNameNormalized: searchRegex },
-                    { code: new RegExp(search, 'i') },
-                    { fullName: new RegExp(search, 'i') },
-                    { phone: new RegExp(search, 'i') },
-                    { idCard: new RegExp(search, 'i') }
+                    { code: rawSearchRegex },
+                    { fullName: rawSearchRegex },
+                    { phone: rawSearchRegex },
+                    { idCard: rawSearchRegex }
                 ];
             } else {
                 // If special chars only or empty normalization, use regex on main fields
-                const searchRegex = new RegExp(search, 'i');
+                const searchRegex = new RegExp(escapedSearch, 'i');
                 filter.$or = [
                     { fullName: searchRegex },
                     { code: searchRegex },
@@ -112,6 +135,32 @@ export class TenantsService {
     async update(id: string, ownerId: string, updateTenantDto: Partial<UpdateTenantDto>, isInternal = false): Promise<Tenant> {
         if (!isInternal && updateTenantDto.status === TenantStatus.RENTING) {
             throw new ForbiddenException('Cannot manually set status to RENTING');
+        }
+
+        // Check for duplicate phone (excluding current tenant)
+        if (updateTenantDto.phone) {
+            const existingPhone = await this.tenantModel.findOne({
+                _id: { $ne: id },
+                ownerId: new Types.ObjectId(ownerId),
+                phone: updateTenantDto.phone,
+                isDeleted: false
+            }).exec();
+            if (existingPhone) {
+                throw new ConflictException('PHONE_EXISTS');
+            }
+        }
+
+        // Check for duplicate idCard (excluding current tenant)
+        if (updateTenantDto.idCard) {
+            const existingIdCard = await this.tenantModel.findOne({
+                _id: { $ne: id },
+                ownerId: new Types.ObjectId(ownerId),
+                idCard: updateTenantDto.idCard,
+                isDeleted: false
+            }).exec();
+            if (existingIdCard) {
+                throw new ConflictException('ID_CARD_EXISTS');
+            }
         }
 
         const updateData: any = { ...updateTenantDto };

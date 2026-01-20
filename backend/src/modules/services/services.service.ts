@@ -39,7 +39,11 @@ export class ServicesService {
 
     async findAll(ownerId: string, query?: GetServicesDto): Promise<any> {
         const filter: any = { ownerId: new Types.ObjectId(ownerId), isDeleted: false };
-        const { search, buildingId, page = 1, limit = 10 } = query || {};
+        const { search, buildingId, isActive, page = 1, limit = 10 } = query || {};
+
+        if (isActive !== undefined) {
+            filter.isActive = isActive;
+        }
 
         if (buildingId) {
             filter.$or = [

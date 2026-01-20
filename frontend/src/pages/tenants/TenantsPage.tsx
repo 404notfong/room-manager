@@ -29,6 +29,9 @@ import apiClient from '@/api/client';
 import Pagination from '@/components/Pagination';
 import TenantForm, { TenantFormData } from '@/components/forms/TenantForm';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useColumnVisibility, ColumnConfig } from '@/hooks/useColumnVisibility';
+import { ColumnVisibilityToggle } from '@/components/ColumnVisibilityToggle';
+import { formatPhoneNumber } from '@/lib/utils';
 
 interface Tenant {
     _id: string;
@@ -109,6 +112,17 @@ export default function TenantsPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
 
+    // Column visibility configuration
+    const columnConfig: ColumnConfig[] = [
+        { id: 'fullName', label: t('tenants.fullName') },
+        { id: 'code', label: t('tenants.code') },
+        { id: 'contact', label: t('tenants.contact') },
+        { id: 'idNumber', label: t('tenants.idNumber') },
+        { id: 'status', label: t('common.status') },
+        { id: 'createdAt', label: t('tenants.createdAt'), defaultVisible: false },
+    ];
+    const columnVisibility = useColumnVisibility('tenants', columnConfig);
+
     const { data: tenantsData, isLoading } = useQuery({
         queryKey: ['tenants', { page: currentPage, limit: pageSize, search: debouncedSearchTerm }],
         queryFn: () => tenantsApi.getAll({ page: currentPage, limit: pageSize, search: debouncedSearchTerm }),
@@ -128,8 +142,15 @@ export default function TenantsPage() {
             setIsAddOpen(false);
             toast({ title: t('tenants.createSuccess') });
         },
-        onError: () => {
-            toast({ variant: 'destructive', title: t('tenants.createError') });
+        onError: (error: any) => {
+            const message = error?.response?.data?.message;
+            if (message === 'PHONE_EXISTS') {
+                toast({ variant: 'destructive', title: t('tenants.phoneExistsError') });
+            } else if (message === 'ID_CARD_EXISTS') {
+                toast({ variant: 'destructive', title: t('tenants.idCardExistsError') });
+            } else {
+                toast({ variant: 'destructive', title: t('tenants.createError') });
+            }
         },
     });
 
@@ -142,8 +163,15 @@ export default function TenantsPage() {
             setSelectedTenant(null);
             toast({ title: t('tenants.updateSuccess') });
         },
-        onError: () => {
-            toast({ variant: 'destructive', title: t('tenants.updateError') });
+        onError: (error: any) => {
+            const message = error?.response?.data?.message;
+            if (message === 'PHONE_EXISTS') {
+                toast({ variant: 'destructive', title: t('tenants.phoneExistsError') });
+            } else if (message === 'ID_CARD_EXISTS') {
+                toast({ variant: 'destructive', title: t('tenants.idCardExistsError') });
+            } else {
+                toast({ variant: 'destructive', title: t('tenants.updateError') });
+            }
         },
     });
 
@@ -228,14 +256,17 @@ export default function TenantsPage() {
 
             {/* Table */}
             <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Users className="h-5 w-5" />
-                        {t('tenants.list')}
-                    </CardTitle>
-                    <CardDescription>
-                        {t('tenants.totalCount', { count: meta.total })}
-                    </CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                    <div>
+                        <CardTitle className="flex items-center gap-2">
+                            <Users className="h-5 w-5" />
+                            {t('tenants.list')}
+                        </CardTitle>
+                        <CardDescription>
+                            {t('tenants.totalCount', { count: meta.total })}
+                        </CardDescription>
+                    </div>
+                    <ColumnVisibilityToggle {...columnVisibility} />
                 </CardHeader>
                 <CardContent>
                     {isLoading ? (
@@ -246,61 +277,69 @@ export default function TenantsPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>{t('tenants.fullName')}</TableHead>
-                                    <TableHead>{t('tenants.code')}</TableHead>
-                                    <TableHead>{t('tenants.contact')}</TableHead>
-                                    <TableHead>{t('tenants.idNumber')}</TableHead>
-                                    <TableHead className="text-center">{t('common.status')}</TableHead>
-                                    <TableHead>{t('tenants.createdAt')}</TableHead>
+                                    {columnVisibility.isVisible('fullName') && <TableHead>{t('tenants.fullName')}</TableHead>}
+                                    {columnVisibility.isVisible('code') && <TableHead>{t('tenants.code')}</TableHead>}
+                                    {columnVisibility.isVisible('contact') && <TableHead>{t('tenants.contact')}</TableHead>}
+                                    {columnVisibility.isVisible('idNumber') && <TableHead>{t('tenants.idNumber')}</TableHead>}
+                                    {columnVisibility.isVisible('status') && <TableHead className="text-center">{t('common.status')}</TableHead>}
+                                    {columnVisibility.isVisible('createdAt') && <TableHead>{t('tenants.createdAt')}</TableHead>}
                                     <TableHead className="w-[70px]"></TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {tenants.map((tenant) => (
                                     <TableRow key={tenant._id}>
-                                        <TableCell>
-                                            <div className="flex items-center gap-3">
-                                                <Avatar>
-                                                    <AvatarFallback className="bg-primary text-primary-foreground">
-                                                        {getInitials(tenant.fullName)}
-                                                    </AvatarFallback>
-                                                </Avatar>
-                                                <span className="font-medium">{tenant.fullName}</span>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="font-mono text-sm">{tenant.code}</TableCell>
-                                        <TableCell>
-                                            <div className="flex flex-col gap-1">
-                                                <div className="flex items-center gap-1 text-sm">
-                                                    <Phone className="h-3 w-3" />
-                                                    {tenant.phone}
+                                        {columnVisibility.isVisible('fullName') && (
+                                            <TableCell>
+                                                <div className="flex items-center gap-3">
+                                                    <Avatar>
+                                                        <AvatarFallback className="bg-primary text-primary-foreground">
+                                                            {getInitials(tenant.fullName)}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                    <span className="font-medium">{tenant.fullName}</span>
                                                 </div>
-                                                {tenant.email && (
-                                                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                                        <Mail className="h-3 w-3" />
-                                                        {tenant.email}
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('code') && <TableCell className="font-mono text-sm">{tenant.code}</TableCell>}
+                                        {columnVisibility.isVisible('contact') && (
+                                            <TableCell>
+                                                <div className="flex flex-col gap-1">
+                                                    <div className="flex items-center gap-1 text-sm">
+                                                        <Phone className="h-3 w-3" />
+                                                        {formatPhoneNumber(tenant.phone)}
                                                     </div>
-                                                )}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>{tenant.idNumber}</TableCell>
-                                        <TableCell className="text-center">
-                                            <Badge
-                                                className={
-                                                    tenant.status === 'RENTING' ? 'bg-blue-500 hover:bg-blue-600' :
-                                                        tenant.status === 'ACTIVE' ? 'bg-green-500 hover:bg-green-600' :
-                                                            tenant.status === 'DEPOSITED' ? 'bg-orange-500 hover:bg-orange-600' :
-                                                                'bg-red-500 hover:bg-red-600'
-                                                }
-                                            >
-                                                {tenant.status === 'RENTING' ? t('tenants.statusRenting') :
-                                                    tenant.status === 'ACTIVE' ? t('tenants.statusActive') :
-                                                        tenant.status === 'DEPOSITED' ? t('tenants.statusDeposited') : t('tenants.statusClosed')}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-sm text-muted-foreground">
-                                            {new Date(tenant.createdAt).toLocaleDateString()}
-                                        </TableCell>
+                                                    {tenant.email && (
+                                                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                                            <Mail className="h-3 w-3" />
+                                                            {tenant.email}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('idNumber') && <TableCell>{tenant.idNumber}</TableCell>}
+                                        {columnVisibility.isVisible('status') && (
+                                            <TableCell className="text-center">
+                                                <Badge
+                                                    className={
+                                                        tenant.status === 'RENTING' ? 'bg-blue-500 hover:bg-blue-600' :
+                                                            tenant.status === 'ACTIVE' ? 'bg-green-500 hover:bg-green-600' :
+                                                                tenant.status === 'DEPOSITED' ? 'bg-orange-500 hover:bg-orange-600' :
+                                                                    'bg-gray-500 hover:bg-gray-600'
+                                                    }
+                                                >
+                                                    {tenant.status === 'RENTING' ? t('tenants.statusRenting') :
+                                                        tenant.status === 'ACTIVE' ? t('tenants.statusActive') :
+                                                            tenant.status === 'DEPOSITED' ? t('tenants.statusDeposited') : t('tenants.statusClosed')}
+                                                </Badge>
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('createdAt') && (
+                                            <TableCell className="text-sm text-muted-foreground">
+                                                {new Date(tenant.createdAt).toLocaleDateString()}
+                                            </TableCell>
+                                        )}
                                         <TableCell>
                                             <div className="flex items-center gap-1">
                                                 <Button variant="ghost" size="icon" onClick={() => handleEdit(tenant)}>

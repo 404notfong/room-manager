@@ -20,6 +20,7 @@ import { RoomGroupsModule } from '@modules/room-groups/room-groups.module';
 import { ServicesModule } from '@modules/services/services.module';
 import { AllExceptionsFilter } from '@common/filters/all-exceptions.filter';
 import { LoggingInterceptor } from '@common/interceptors/logging.interceptor';
+import { AppController } from './app.controller';
 
 @Module({
     imports: [
@@ -64,23 +65,21 @@ import { LoggingInterceptor } from '@common/interceptors/logging.interceptor';
                         }),
                     ),
                 }),
-                ...(process.env.VERCEL ? [] : [
-                    new winston.transports.File({
-                        filename: 'logs/error.log',
-                        level: 'error',
-                        format: winston.format.combine(
-                            winston.format.timestamp(),
-                            winston.format.json(),
-                        ),
-                    }),
-                    new winston.transports.File({
-                        filename: 'logs/combined.log',
-                        format: winston.format.combine(
-                            winston.format.timestamp(),
-                            winston.format.json(),
-                        ),
-                    }),
-                ]),
+                new winston.transports.File({
+                    filename: 'logs/error.log',
+                    level: 'error',
+                    format: winston.format.combine(
+                        winston.format.timestamp(),
+                        winston.format.json(),
+                    ),
+                }),
+                new winston.transports.File({
+                    filename: 'logs/combined.log',
+                    format: winston.format.combine(
+                        winston.format.timestamp(),
+                        winston.format.json(),
+                    ),
+                }),
             ],
         }),
 
@@ -96,6 +95,7 @@ import { LoggingInterceptor } from '@common/interceptors/logging.interceptor';
         RoomGroupsModule,
         ServicesModule,
     ],
+    controllers: [AppController],
     providers: [
         {
             provide: APP_FILTER,

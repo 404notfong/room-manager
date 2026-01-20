@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { DialogFooter } from '@/components/ui/dialog';
+import { DialogBody, DialogFooter } from '@/components/ui/dialog';
 import {
     Select,
     SelectContent,
@@ -102,93 +102,95 @@ export default function RoomGroupForm({
     const selectedBuildingName = buildings.find((b: any) => b._id === initialBuildingId)?.name;
 
     return (
-        <form onSubmit={handleSubmit(onSubmit)}>
-            <div className="space-y-4 py-4 px-1 max-h-[60vh] overflow-y-auto">
-                {defaultValues?.code && (
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
+            <DialogBody>
+                <div className="space-y-4">
+                    {defaultValues?.code && (
+                        <div className="space-y-2">
+                            <Label>{t('roomGroups.code')}</Label>
+                            <Input value={defaultValues.code} disabled className="bg-muted" />
+                        </div>
+                    )}
                     <div className="space-y-2">
-                        <Label>{t('roomGroups.code')}</Label>
-                        <Input value={defaultValues.code} disabled className="bg-muted" />
-                    </div>
-                )}
-                <div className="space-y-2">
-                    <Label htmlFor="buildingId">{t('rooms.building')} <span className="text-destructive">*</span></Label>
-                    {hasBuildingPreselected ? (
-                        <>
-                            <Input
-                                value={selectedBuildingName || t('common.loading')}
-                                disabled
-                                className="bg-muted"
-                            />
-                            <input type="hidden" {...register('buildingId')} />
-                        </>
-                    ) : (
-                        <Controller
-                            name="buildingId"
-                            control={control}
-                            render={({ field }) => (
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                    <SelectTrigger className={errors.buildingId ? 'border-destructive' : ''}>
-                                        <SelectValue placeholder={t('rooms.selectBuilding')} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {buildings.map((b: any) => (
-                                            <SelectItem key={b._id} value={b._id}>
-                                                {b.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            )}
-                        />
-                    )}
-                    {errors.buildingId && (
-                        <p className="text-sm text-destructive">{errors.buildingId.message}</p>
-                    )}
-                </div>
-
-                <div className="space-y-2">
-                    <Label htmlFor="name">{t('roomGroups.name')} <span className="text-destructive">*</span></Label>
-                    <Input
-                        id="name"
-                        {...register('name')}
-                        className={errors.name ? 'border-destructive' : ''}
-                    />
-                    {errors.name && (
-                        <p className="text-sm text-destructive">{errors.name.message}</p>
-                    )}
-                </div>
-
-                <div className="space-y-2">
-                    <Label htmlFor="description">{t('roomGroups.description')}</Label>
-                    <Input id="description" {...register('description')} />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                        <Label>{t('roomGroups.color')}</Label>
-                        <div className="flex flex-wrap gap-2">
-                            {COLORS.map((color) => (
-                                <button
-                                    key={color.value}
-                                    type="button"
-                                    onClick={() => setValue('color', color.value)}
-                                    className={`w-8 h-8 rounded-full ${getColorBadge(color.value)} ${selectedColor === color.value ? 'ring-2 ring-offset-2 ring-primary' : ''
-                                        }`}
-                                    title={color.name}
+                        <Label htmlFor="buildingId">{t('rooms.building')} <span className="text-destructive">*</span></Label>
+                        {hasBuildingPreselected ? (
+                            <>
+                                <Input
+                                    value={selectedBuildingName || t('common.loading')}
+                                    disabled
+                                    className="bg-muted"
                                 />
-                            ))}
+                                <input type="hidden" {...register('buildingId')} />
+                            </>
+                        ) : (
+                            <Controller
+                                name="buildingId"
+                                control={control}
+                                render={({ field }) => (
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <SelectTrigger className={errors.buildingId ? 'border-destructive' : ''}>
+                                            <SelectValue placeholder={t('rooms.selectBuilding')} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {buildings.map((b: any) => (
+                                                <SelectItem key={b._id} value={b._id}>
+                                                    {b.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                )}
+                            />
+                        )}
+                        {errors.buildingId && (
+                            <p className="text-sm text-destructive">{errors.buildingId.message}</p>
+                        )}
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="name">{t('roomGroups.name')} <span className="text-destructive">*</span></Label>
+                        <Input
+                            id="name"
+                            {...register('name')}
+                            className={errors.name ? 'border-destructive' : ''}
+                        />
+                        {errors.name && (
+                            <p className="text-sm text-destructive">{errors.name.message}</p>
+                        )}
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="description">{t('roomGroups.description')}</Label>
+                        <Input id="description" {...register('description')} />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>{t('roomGroups.color')}</Label>
+                            <div className="flex flex-wrap gap-2">
+                                {COLORS.map((color) => (
+                                    <button
+                                        key={color.value}
+                                        type="button"
+                                        onClick={() => setValue('color', color.value)}
+                                        className={`w-8 h-8 rounded-full ${getColorBadge(color.value)} ${selectedColor === color.value ? 'ring-2 ring-offset-2 ring-primary' : ''
+                                            }`}
+                                        title={color.name}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="sortOrder">{t('roomGroups.sortOrder')}</Label>
+                            <Input
+                                id="sortOrder"
+                                type="number"
+                                {...register('sortOrder', { valueAsNumber: true })}
+                            />
                         </div>
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="sortOrder">{t('roomGroups.sortOrder')}</Label>
-                        <Input
-                            id="sortOrder"
-                            type="number"
-                            {...register('sortOrder', { valueAsNumber: true })}
-                        />
-                    </div>
                 </div>
-            </div>
+            </DialogBody>
 
             <DialogFooter>
                 <Button type="button" variant="outline" onClick={onCancel}>

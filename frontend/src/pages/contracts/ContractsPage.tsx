@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, MoreHorizontal, FileText, Calendar, Pencil, Trash2, Search, Zap, Droplets } from 'lucide-react';
+import { Plus, FileText, Calendar, Pencil, Trash2, Search, Zap, Droplets } from 'lucide-react';
 import { PriceTablePopover } from '@/components/PriceTablePopover';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,17 +23,15 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+
 import { toast } from '@/hooks/use-toast';
 import apiClient from '@/api/client';
 import Pagination from '@/components/Pagination';
 import { useBuildingStore } from '@/stores/buildingStore';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useColumnVisibility, ColumnConfig } from '@/hooks/useColumnVisibility';
+import { ColumnVisibilityToggle } from '@/components/ColumnVisibilityToggle';
+import { formatPhoneNumber } from '@/lib/utils';
 
 interface Contract {
     _id: string;
@@ -88,6 +86,7 @@ const contractsApi = {
 
 import ContractForm from './ContractForm';
 import { ActivateContractDialog } from '@/components/ActivateContractDialog';
+import ContractViewModal from '@/components/ContractViewModal';
 
 export default function ContractsPage() {
     const { t } = useTranslation();
@@ -98,9 +97,24 @@ export default function ContractsPage() {
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [isActivateOpen, setIsActivateOpen] = useState(false);
+    const [isViewOpen, setIsViewOpen] = useState(false);
     const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
+
+    // Column visibility configuration
+    const columnConfig: ColumnConfig[] = [
+        { id: 'code', label: t('contracts.code') },
+        { id: 'tenant', label: t('contracts.tenant') },
+        { id: 'room', label: t('contracts.room') },
+        { id: 'type', label: t('contracts.type') },
+        { id: 'period', label: t('contracts.period') },
+        { id: 'rentPrice', label: t('contracts.rentPrice') },
+        { id: 'deposit', label: t('contracts.deposit'), defaultVisible: false },
+        { id: 'totalService', label: t('contracts.totalServiceAmount'), defaultVisible: false },
+        { id: 'status', label: t('common.status') },
+    ];
+    const columnVisibility = useColumnVisibility('contracts', columnConfig);
 
     const { data: contractsData, isLoading } = useQuery({
         queryKey: ['contracts', { page: currentPage, limit: pageSize, search: debouncedSearchTerm, buildingId: selectedBuildingId }],
@@ -148,6 +162,11 @@ export default function ContractsPage() {
         setIsActivateOpen(true);
     };
 
+    const handleViewContract = (contract: Contract) => {
+        setSelectedContract(contract);
+        setIsViewOpen(true);
+    };
+
     const handleDelete = (contract: Contract) => {
         setSelectedContract(contract);
         setIsDeleteOpen(true);
@@ -156,13 +175,13 @@ export default function ContractsPage() {
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'ACTIVE':
-                return <Badge className="bg-green-500">{t('contracts.statusActive')}</Badge>;
+                return <Badge className="bg-emerald-500 text-white border-0">{t('contracts.statusActive')}</Badge>;
             case 'EXPIRED':
-                return <Badge variant="secondary">{t('contracts.statusExpired')}</Badge>;
+                return <Badge className="bg-gray-500 text-white border-0">{t('contracts.statusExpired')}</Badge>;
             case 'TERMINATED':
-                return <Badge variant="destructive">{t('contracts.statusTerminated')}</Badge>;
+                return <Badge className="bg-red-500 text-white border-0">{t('contracts.statusTerminated')}</Badge>;
             case 'DRAFT':
-                return <Badge variant="outline" className="border-orange-500 text-orange-500 bg-orange-50">{t('contracts.statusDraft')}</Badge>;
+                return <Badge className="bg-amber-500 text-white border-0">{t('contracts.statusDraft')}</Badge>;
             default:
                 return <Badge variant="outline">{status}</Badge>;
         }
@@ -308,14 +327,17 @@ export default function ContractsPage() {
 
             {/* Table */}
             <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <FileText className="h-5 w-5" />
-                        {t('contracts.list')}
-                    </CardTitle>
-                    <CardDescription>
-                        {t('contracts.totalCount', { count: meta.total })}
-                    </CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                    <div>
+                        <CardTitle className="flex items-center gap-2">
+                            <FileText className="h-5 w-5" />
+                            {t('contracts.list')}
+                        </CardTitle>
+                        <CardDescription>
+                            {t('contracts.totalCount', { count: meta.total })}
+                        </CardDescription>
+                    </div>
+                    <ColumnVisibilityToggle {...columnVisibility} />
                 </CardHeader>
                 <CardContent>
                     {isLoading ? (
@@ -326,89 +348,102 @@ export default function ContractsPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="w-[120px]">{t('contracts.code')}</TableHead>
-                                    <TableHead className="w-[180px]">{t('contracts.tenant')}</TableHead>
-                                    <TableHead className="w-[150px]">{t('contracts.room')}</TableHead>
-                                    <TableHead className="text-center w-[100px]">{t('contracts.type')}</TableHead>
-                                    <TableHead className="w-[120px]">{t('contracts.period')}</TableHead>
-                                    <TableHead className="text-right w-[150px]">{t('contracts.rentPrice')}</TableHead>
-                                    <TableHead className="text-right w-[120px]">{t('contracts.deposit')}</TableHead>
-                                    <TableHead className="text-right w-[130px]">{t('contracts.totalServiceAmount')}</TableHead>
-                                    <TableHead className="text-center w-[120px]">{t('common.status')}</TableHead>
+                                    {columnVisibility.isVisible('code') && <TableHead className="w-[120px]">{t('contracts.code')}</TableHead>}
+                                    {columnVisibility.isVisible('tenant') && <TableHead className="w-[180px]">{t('contracts.tenant')}</TableHead>}
+                                    {columnVisibility.isVisible('room') && <TableHead className="w-[150px]">{t('contracts.room')}</TableHead>}
+                                    {columnVisibility.isVisible('type') && <TableHead className="text-center w-[100px]">{t('contracts.type')}</TableHead>}
+                                    {columnVisibility.isVisible('period') && <TableHead className="w-[120px]">{t('contracts.period')}</TableHead>}
+                                    {columnVisibility.isVisible('rentPrice') && <TableHead className="text-right w-[150px]">{t('contracts.rentPrice')}</TableHead>}
+                                    {columnVisibility.isVisible('deposit') && <TableHead className="text-right w-[120px]">{t('contracts.deposit')}</TableHead>}
+                                    {columnVisibility.isVisible('totalService') && <TableHead className="text-right w-[130px]">{t('contracts.totalServiceAmount')}</TableHead>}
+                                    {columnVisibility.isVisible('status') && <TableHead className="text-center w-[120px]">{t('common.status')}</TableHead>}
                                     <TableHead className="w-[50px]"></TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {contracts.map((contract) => (
                                     <TableRow key={contract._id}>
-                                        <TableCell className="font-mono text-xs font-medium">{contract.contractCode || '-'}</TableCell>
-                                        <TableCell>
-                                            <div className="font-medium">{contract.tenantId?.fullName || '-'}</div>
-                                            <div className="text-xs text-muted-foreground">{contract.tenantId?.phone || '-'}</div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="font-medium">{contract.roomId?.roomName || contract.roomId?.roomCode || '-'}</div>
-                                            <div className="text-xs text-muted-foreground">{contract.roomId?.buildingId?.name || '-'}</div>
-                                        </TableCell>
-                                        <TableCell className="text-center">{getContractTypeBadge(contract.roomType, contract.contractType)}</TableCell>
-                                        <TableCell>
-                                            <div className="flex flex-col gap-1 text-sm">
-                                                <div className="flex items-center gap-1">
-                                                    <Calendar className="h-3 w-3" />
-                                                    {formatDate(contract.startDate)}
+                                        {columnVisibility.isVisible('code') && (
+                                            <TableCell
+                                                className="font-mono text-xs font-medium cursor-pointer hover:text-primary hover:underline"
+                                                onClick={() => handleViewContract(contract)}
+                                            >
+                                                {contract.contractCode || '-'}
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('tenant') && (
+                                            <TableCell>
+                                                <div className="font-medium">{contract.tenantId?.fullName || '-'}</div>
+                                                <div className="text-xs text-muted-foreground">{formatPhoneNumber(contract.tenantId?.phone)}</div>
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('room') && (
+                                            <TableCell>
+                                                <div className="font-medium">{contract.roomId?.roomName || contract.roomId?.roomCode || '-'}</div>
+                                                <div className="text-xs text-muted-foreground">{contract.roomId?.buildingId?.name || '-'}</div>
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('type') && (
+                                            <TableCell className="text-center">{getContractTypeBadge(contract.roomType, contract.contractType)}</TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('period') && (
+                                            <TableCell>
+                                                <div className="flex flex-col gap-1 text-sm">
+                                                    <div className="flex items-center gap-1">
+                                                        <Calendar className="h-3 w-3" />
+                                                        {formatDate(contract.startDate)}
+                                                    </div>
+                                                    <div className="flex items-center gap-1 text-muted-foreground text-xs font-normal">
+                                                        <Calendar className="h-3 w-3 invisible" />
+                                                        {contract.endDate ? formatDate(contract.endDate) : t('contracts.noEndDate')}
+                                                    </div>
                                                 </div>
-                                                <div className="flex items-center gap-1 text-muted-foreground text-xs font-normal">
-                                                    <Calendar className="h-3 w-3 invisible" />
-                                                    {contract.endDate ? formatDate(contract.endDate) : t('contracts.noEndDate')}
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('rentPrice') && (
+                                            <TableCell className="text-right">
+                                                <div className="flex flex-col gap-1 text-sm items-end">
+                                                    <div className="font-medium whitespace-nowrap">
+                                                        {getRentPriceDisplay(contract)}
+                                                    </div>
+                                                    <div className="text-muted-foreground text-xs font-normal">
+                                                        {getPaymentCycleLabel(contract)}
+                                                    </div>
                                                 </div>
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('deposit') && (
+                                            <TableCell className="text-right font-medium">
+                                                {formatCurrency(contract.depositAmount)}
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('totalService') && (
+                                            <TableCell className="text-right">
+                                                {formatCurrency(getTotalServices(contract))}
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('status') && (
+                                            <TableCell className="text-center">{getStatusBadge(contract.status)}</TableCell>
+                                        )}
+                                        <TableCell>
+                                            <div className="flex items-center gap-1">
+                                                <Button variant="ghost" size="icon" onClick={() => {
+                                                    setSelectedContract(contract);
+                                                    setIsCreateOpen(true);
+                                                }}>
+                                                    <Pencil className="h-4 w-4" />
+                                                </Button>
+                                                {contract.status === 'DRAFT' && (
+                                                    <>
+                                                        <Button variant="ghost" size="icon" onClick={() => handleActivate(contract)} className="text-blue-600 hover:text-blue-600">
+                                                            <Calendar className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button variant="ghost" size="icon" onClick={() => handleDelete(contract)} className="text-destructive hover:text-destructive">
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </>
+                                                )}
                                             </div>
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <div className="flex flex-col gap-1 text-sm items-end">
-                                                <div className="font-medium whitespace-nowrap">
-                                                    {getRentPriceDisplay(contract)}
-                                                </div>
-                                                <div className="text-muted-foreground text-xs font-normal">
-                                                    {getPaymentCycleLabel(contract)}
-                                                </div>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="text-right font-medium">
-                                            {formatCurrency(contract.depositAmount)}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            {formatCurrency(getTotalServices(contract))}
-                                        </TableCell>
-                                        <TableCell className="text-center">{getStatusBadge(contract.status)}</TableCell>
-                                        <TableCell>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon">
-                                                        <MoreHorizontal className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={() => {
-                                                        setSelectedContract(contract);
-                                                        setIsCreateOpen(true);
-                                                    }}>
-                                                        <Pencil className="mr-2 h-4 w-4" />
-                                                        {t('common.edit')}
-                                                    </DropdownMenuItem>
-                                                    {contract.status === 'DRAFT' && (
-                                                        <>
-                                                            <DropdownMenuItem onClick={() => handleActivate(contract)} className="text-blue-600">
-                                                                <Calendar className="mr-2 h-4 w-4" />
-                                                                {t('contracts.activate')}
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem onClick={() => handleDelete(contract)} className="text-destructive">
-                                                                <Trash2 className="mr-2 h-4 w-4" />
-                                                                {t('common.delete')}
-                                                            </DropdownMenuItem>
-                                                        </>
-                                                    )}
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -475,6 +510,13 @@ export default function ContractsPage() {
                     isSubmitting={activateMutation.isPending}
                 />
             )}
+
+            {/* View Contract Modal */}
+            <ContractViewModal
+                open={isViewOpen}
+                onOpenChange={setIsViewOpen}
+                contract={selectedContract}
+            />
         </div>
     );
 }

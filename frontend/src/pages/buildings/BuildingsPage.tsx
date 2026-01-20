@@ -29,6 +29,8 @@ import Pagination from '@/components/Pagination';
 import BuildingForm, { BuildingFormData } from '@/components/forms/BuildingForm';
 import { formatCellValue } from '@/utils/tableUtils';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useColumnVisibility, ColumnConfig } from '@/hooks/useColumnVisibility';
+import { ColumnVisibilityToggle } from '@/components/ColumnVisibilityToggle';
 
 interface Address {
     street: string;
@@ -80,6 +82,15 @@ export default function BuildingsPage() {
     const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
+
+    // Column visibility configuration
+    const columnConfig: ColumnConfig[] = [
+        { id: 'name', label: t('buildings.name') },
+        { id: 'code', label: t('buildings.code') },
+        { id: 'address', label: t('buildings.address') },
+        { id: 'totalRooms', label: t('buildings.totalRooms') },
+    ];
+    const columnVisibility = useColumnVisibility('buildings', columnConfig);
 
     // Debounce search term would be ideal, but for now passing directly
     const { data, isPending, error } = useQuery({
@@ -220,14 +231,17 @@ export default function BuildingsPage() {
 
             {/* Table */}
             <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Building2 className="h-5 w-5" />
-                        {t('buildings.list')}
-                    </CardTitle>
-                    <CardDescription>
-                        {t('buildings.totalCount', { count: meta.total })}
-                    </CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                    <div>
+                        <CardTitle className="flex items-center gap-2">
+                            <Building2 className="h-5 w-5" />
+                            {t('buildings.list')}
+                        </CardTitle>
+                        <CardDescription>
+                            {t('buildings.totalCount', { count: meta.total })}
+                        </CardDescription>
+                    </div>
+                    <ColumnVisibilityToggle {...columnVisibility} />
                 </CardHeader>
                 <CardContent>
                     {isPending ? (
@@ -242,24 +256,28 @@ export default function BuildingsPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>{t('buildings.name')}</TableHead>
-                                    <TableHead>{t('buildings.code')}</TableHead>
-                                    <TableHead>{t('buildings.address')}</TableHead>
-                                    <TableHead className="text-center">{t('buildings.totalRooms')}</TableHead>
+                                    {columnVisibility.isVisible('name') && <TableHead>{t('buildings.name')}</TableHead>}
+                                    {columnVisibility.isVisible('code') && <TableHead>{t('buildings.code')}</TableHead>}
+                                    {columnVisibility.isVisible('address') && <TableHead>{t('buildings.address')}</TableHead>}
+                                    {columnVisibility.isVisible('totalRooms') && <TableHead className="text-center">{t('buildings.totalRooms')}</TableHead>}
                                     <TableHead className="w-[70px]"></TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {buildings.map((building: Building) => (
                                     <TableRow key={building._id}>
-                                        <TableCell className="font-medium">{formatCellValue(building.name)}</TableCell>
-                                        <TableCell>{formatCellValue(building.code)}</TableCell>
-                                        <TableCell className="max-w-[300px] truncate">
-                                            {formatCellValue(formatAddress(building.address))}
-                                        </TableCell>
-                                        <TableCell className="text-center">
-                                            <Badge variant="secondary">{formatCellValue(building.totalRooms || 0)}</Badge>
-                                        </TableCell>
+                                        {columnVisibility.isVisible('name') && <TableCell className="font-medium">{formatCellValue(building.name)}</TableCell>}
+                                        {columnVisibility.isVisible('code') && <TableCell>{formatCellValue(building.code)}</TableCell>}
+                                        {columnVisibility.isVisible('address') && (
+                                            <TableCell className="max-w-[300px] truncate">
+                                                {formatCellValue(formatAddress(building.address))}
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('totalRooms') && (
+                                            <TableCell className="text-center">
+                                                <Badge variant="secondary">{formatCellValue(building.totalRooms || 0)}</Badge>
+                                            </TableCell>
+                                        )}
                                         <TableCell>
                                             <div className="flex items-center gap-1">
                                                 <Button variant="ghost" size="icon" onClick={() => handleEdit(building)}>

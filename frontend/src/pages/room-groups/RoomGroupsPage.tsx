@@ -29,6 +29,8 @@ import Pagination from '@/components/Pagination';
 import RoomGroupForm, { RoomGroupFormData } from '@/components/forms/RoomGroupForm';
 import { useBuildingStore } from '@/stores/buildingStore';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useColumnVisibility, ColumnConfig } from '@/hooks/useColumnVisibility';
+import { ColumnVisibilityToggle } from '@/components/ColumnVisibilityToggle';
 
 interface RoomGroup {
     _id: string;
@@ -86,6 +88,16 @@ export default function RoomGroupsPage() {
     const [selectedGroup, setSelectedGroup] = useState<RoomGroup | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
+
+    // Column visibility configuration
+    const columnConfig: ColumnConfig[] = [
+        { id: 'name', label: t('roomGroups.name') },
+        { id: 'code', label: t('roomGroups.code') },
+        { id: 'description', label: t('roomGroups.description') },
+        { id: 'sortOrder', label: t('roomGroups.sortOrder') },
+        { id: 'status', label: t('common.status') },
+    ];
+    const columnVisibility = useColumnVisibility('roomGroups', columnConfig);
 
     const { data: roomGroupsData, isLoading } = useQuery({
         queryKey: ['room-groups', { buildingId: selectedBuildingId, page: currentPage, limit: pageSize, search: debouncedSearchTerm }],
@@ -217,14 +229,17 @@ export default function RoomGroupsPage() {
 
             {/* Table */}
             <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Layers className="h-5 w-5" />
-                        {t('roomGroups.list')}
-                    </CardTitle>
-                    <CardDescription>
-                        {t('roomGroups.totalCount', { count: meta.total })}
-                    </CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                    <div>
+                        <CardTitle className="flex items-center gap-2">
+                            <Layers className="h-5 w-5" />
+                            {t('roomGroups.list')}
+                        </CardTitle>
+                        <CardDescription>
+                            {t('roomGroups.totalCount', { count: meta.total })}
+                        </CardDescription>
+                    </div>
+                    <ColumnVisibilityToggle {...columnVisibility} />
                 </CardHeader>
                 <CardContent>
                     {isLoading ? (
@@ -235,33 +250,39 @@ export default function RoomGroupsPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>{t('roomGroups.name')}</TableHead>
-                                    <TableHead>{t('roomGroups.code')}</TableHead>
-                                    <TableHead>{t('roomGroups.description')}</TableHead>
-                                    <TableHead className="text-center">{t('roomGroups.sortOrder')}</TableHead>
-                                    <TableHead className="text-center">{t('common.status')}</TableHead>
+                                    {columnVisibility.isVisible('name') && <TableHead>{t('roomGroups.name')}</TableHead>}
+                                    {columnVisibility.isVisible('code') && <TableHead>{t('roomGroups.code')}</TableHead>}
+                                    {columnVisibility.isVisible('description') && <TableHead>{t('roomGroups.description')}</TableHead>}
+                                    {columnVisibility.isVisible('sortOrder') && <TableHead className="text-center">{t('roomGroups.sortOrder')}</TableHead>}
+                                    {columnVisibility.isVisible('status') && <TableHead className="text-center">{t('common.status')}</TableHead>}
                                     <TableHead className="w-[70px]"></TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {roomGroups.map((group) => (
                                     <TableRow key={group._id}>
-                                        <TableCell>
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-6 h-6 rounded-full shrink-0 ${getColorBadge(group.color || 'gray')}`} />
-                                                <span className="font-medium">{group.name}</span>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="font-mono text-sm">{(group as any).code}</TableCell>
-                                        <TableCell className="text-muted-foreground max-w-[200px] truncate">
-                                            {group.description || '-'}
-                                        </TableCell>
-                                        <TableCell className="text-center">{group.sortOrder}</TableCell>
-                                        <TableCell className="text-center">
-                                            <Badge variant={group.isActive ? 'default' : 'secondary'}>
-                                                {group.isActive ? t('common.active') : t('common.inactive')}
-                                            </Badge>
-                                        </TableCell>
+                                        {columnVisibility.isVisible('name') && (
+                                            <TableCell>
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-6 h-6 rounded-full shrink-0 ${getColorBadge(group.color || 'gray')}`} />
+                                                    <span className="font-medium">{group.name}</span>
+                                                </div>
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('code') && <TableCell className="font-mono text-sm">{(group as any).code}</TableCell>}
+                                        {columnVisibility.isVisible('description') && (
+                                            <TableCell className="text-muted-foreground max-w-[200px] truncate">
+                                                {group.description || '-'}
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('sortOrder') && <TableCell className="text-center">{group.sortOrder}</TableCell>}
+                                        {columnVisibility.isVisible('status') && (
+                                            <TableCell className="text-center">
+                                                <Badge variant={group.isActive ? 'default' : 'secondary'}>
+                                                    {group.isActive ? t('common.active') : t('common.inactive')}
+                                                </Badge>
+                                            </TableCell>
+                                        )}
                                         <TableCell>
                                             <div className="flex items-center gap-1">
                                                 <Button variant="ghost" size="icon" onClick={() => handleEdit(group)}>

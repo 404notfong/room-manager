@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsMongoId, IsEnum, IsDate, IsDateString, IsNumber, IsArray, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { IsNotEmpty, IsMongoId, IsEnum, IsDate, IsDateString, IsNumber, IsArray, IsOptional, IsString, ValidateNested, IsBoolean, ValidateIf } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { ContractType, ContractStatus, PaymentCycle, RoomType, ShortTermPricingType } from '@common/constants/enums';
 import { CreateTenantDto } from '@modules/tenants/dto/tenant.dto';
@@ -14,6 +14,7 @@ class ServiceChargeDto {
     @IsOptional()
     quantity?: number;
 
+    @IsBoolean()
     @IsOptional()
     isRecurring?: boolean;
 
@@ -21,6 +22,7 @@ class ServiceChargeDto {
     @IsOptional()
     serviceId?: string;
 
+    @IsBoolean()
     @IsOptional()
     isPredefined?: boolean;
 }
@@ -42,8 +44,8 @@ export class CreateContractDto {
     roomId: string;
 
     @IsMongoId()
-    @IsOptional()
-    buildingId?: string;
+    @IsNotEmpty()
+    buildingId: string;
 
     @IsMongoId()
     @IsOptional()
@@ -55,8 +57,8 @@ export class CreateContractDto {
     newTenant?: CreateTenantDto;
 
     @IsEnum(ContractType)
-    @IsOptional()
-    contractType?: ContractType;
+    @IsNotEmpty()
+    contractType: ContractType;
 
     // === Pricing Overrides ===
     @IsEnum(RoomType)
@@ -85,24 +87,20 @@ export class CreateContractDto {
     @IsOptional()
     shortTermPrices?: ShortTermPriceTierDto[];
 
-    @IsDate()
     @Type(() => Date)
     @IsNotEmpty()
+    @IsDate()
     startDate: Date;
 
-    @IsDate()
+    @Type(() => Date)
     @IsOptional()
-    @Transform(({ value }) => {
-        if (value === '' || value === null) return undefined;
-        return new Date(value);
-    })
-    endDate?: any;
+    @IsDate()
+    endDate?: Date | undefined;
 
     @IsNumber()
     rentPrice: number;
 
     @IsNumber()
-    @IsOptional()
     depositAmount?: number;
 
     @IsNumber()
@@ -157,14 +155,19 @@ export class UpdateContractDto {
     @IsOptional()
     contractType?: ContractType;
 
-    @IsDate()
+    @IsEnum(RoomType)
+    @IsOptional()
+    roomType?: RoomType;
+
     @Type(() => Date)
     @IsOptional()
-    @Transform(({ value }) => {
-        if (value === '' || value === null) return undefined;
-        return new Date(value);
-    })
-    endDate?: any;
+    @IsDate()
+    startDate?: Date;
+
+    @Type(() => Date)
+    @IsOptional()
+    @IsDate()
+    endDate?: Date | undefined;
 
     @IsNumber()
     @IsOptional()
@@ -181,6 +184,14 @@ export class UpdateContractDto {
     @IsNumber()
     @IsOptional()
     waterPrice?: number;
+
+    @IsNumber()
+    @IsOptional()
+    initialElectricIndex?: number;
+
+    @IsNumber()
+    @IsOptional()
+    initialWaterIndex?: number;
 
     @IsArray()
     @ValidateNested({ each: true })
@@ -200,6 +211,28 @@ export class UpdateContractDto {
     @IsOptional()
     paymentDueDay?: number;
 
+    @IsEnum(ShortTermPricingType)
+    @IsOptional()
+    shortTermPricingType?: ShortTermPricingType;
+
+    @IsString()
+    @IsOptional()
+    hourlyPricingMode?: string;
+
+    @IsNumber()
+    @IsOptional()
+    pricePerHour?: number;
+
+    @IsNumber()
+    @IsOptional()
+    fixedPrice?: number;
+
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => ShortTermPriceTierDto)
+    @IsOptional()
+    shortTermPrices?: ShortTermPriceTierDto[];
+
     @IsEnum(ContractStatus)
     @IsOptional()
     status?: ContractStatus;
@@ -211,6 +244,38 @@ export class UpdateContractDto {
     @IsString()
     @IsOptional()
     terms?: string;
+
+    @IsMongoId()
+    @IsOptional()
+    roomId?: string;
+
+    @IsMongoId()
+    @IsOptional()
+    tenantId?: string;
+
+    @IsMongoId()
+    @IsOptional()
+    buildingId?: string;
+
+    @IsString()
+    @IsOptional()
+    contractCode?: string;
+
+    @IsMongoId()
+    @IsOptional()
+    ownerId?: string;
+
+    @IsOptional()
+    _id?: any;
+
+    @IsOptional()
+    __v?: any;
+
+    @IsOptional()
+    createdAt?: any;
+
+    @IsOptional()
+    updatedAt?: any;
 }
 
 export class GetContractsDto {
@@ -234,16 +299,13 @@ export class GetContractsDto {
 }
 
 export class ActivateContractDto {
-    @IsDate()
     @Type(() => Date)
     @IsNotEmpty()
+    @IsDate()
     startDate: Date;
 
-    @IsDate()
+    @Type(() => Date)
     @IsOptional()
-    @Transform(({ value }) => {
-        if (value === '' || value === null) return undefined;
-        return new Date(value);
-    })
-    endDate?: any;
+    @IsDate()
+    endDate?: Date | undefined;
 }
