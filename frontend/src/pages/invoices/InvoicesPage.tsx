@@ -32,6 +32,7 @@ import { toast } from '@/hooks/use-toast';
 import apiClient from '@/api/client';
 import Pagination from '@/components/Pagination';
 import { useBuildingStore } from '@/stores/buildingStore';
+import { TableSkeleton } from '@/components/ui/skeletons/TableSkeleton';
 
 interface Invoice {
     _id: string;
@@ -96,9 +97,9 @@ export default function InvoicesPage() {
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'paid':
-                return <Badge className="bg-green-500">{t('invoices.statusPaid')}</Badge>;
+                return <Badge className="bg-green-500 text-[#F8FAFC] hover:bg-green-600">{t('invoices.statusPaid')}</Badge>;
             case 'pending':
-                return <Badge className="bg-yellow-500">{t('invoices.statusPending')}</Badge>;
+                return <Badge className="bg-yellow-500 text-[#F8FAFC] hover:bg-yellow-600">{t('invoices.statusPending')}</Badge>;
             case 'overdue':
                 return <Badge variant="destructive">{t('invoices.statusOverdue')}</Badge>;
             case 'cancelled':
@@ -108,9 +109,7 @@ export default function InvoicesPage() {
         }
     };
 
-    const formatDate = (date: string) => {
-        return new Date(date).toLocaleDateString('vi-VN');
-    };
+
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
@@ -184,7 +183,7 @@ export default function InvoicesPage() {
                 </CardHeader>
                 <CardContent>
                     {isLoading ? (
-                        <div className="text-center py-8 text-muted-foreground">{t('common.loading')}</div>
+                        <TableSkeleton columns={7} />
                     ) : filteredInvoices.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">{t('invoices.noData')}</div>
                     ) : (

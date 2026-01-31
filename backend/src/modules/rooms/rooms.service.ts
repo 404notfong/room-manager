@@ -5,6 +5,7 @@ import { Room, RoomDocument } from '@modules/rooms/schemas/room.schema';
 import { Building, BuildingDocument } from '@modules/buildings/schemas/building.schema';
 import { CreateRoomDto, UpdateRoomDto, UpdateIndexesDto, GetRoomsDto, DashboardRoomsDto } from '@modules/rooms/dto/room.dto';
 import { normalizeString, escapeRegExp } from '@common/utils/string.util';
+import { RoomStatus } from '@common/constants/enums';
 
 @Injectable()
 export class RoomsService {
@@ -38,6 +39,7 @@ export class RoomsService {
 
         const room = new this.roomModel({
             ...createRoomDto,
+            status: RoomStatus.AVAILABLE, // Force status to AVAILABLE
             nameNormalized: normalizeString(createRoomDto.roomName),
             ownerId: new Types.ObjectId(ownerId),
             buildingId: new Types.ObjectId(createRoomDto.buildingId),
@@ -139,6 +141,13 @@ export class RoomsService {
             .exec();
         if (!existingRoom) throw new NotFoundException('Room not found');
 
+        // Check for Status Lock
+        if (updateRoomDto.status && updateRoomDto.status !== existingRoom.status) {
+            if (existingRoom.status === RoomStatus.OCCUPIED || existingRoom.status === RoomStatus.DEPOSITED) {
+                throw new BadRequestException('Cannot manually change status of an OCCUPIED or DEPOSITED room');
+            }
+        }
+
         // Prevent updating buildingId
         const dto = updateRoomDto as any;
         if (dto.buildingId) {
@@ -151,6 +160,10 @@ export class RoomsService {
         }
 
         // Convert roomGroupId to ObjectId if present
+        if (dto.roomGroupId) {
+            dto.roomGroupId = new Types.ObjectId(dto.roomGroupId);
+        }
+
         if (dto.roomName) {
             (dto as any).nameNormalized = normalizeString(dto.roomName);
         }
@@ -270,7 +283,7 @@ export class RoomsService {
                                 $expr: {
                                     $and: [
                                         { $eq: ['$roomId', '$$roomId'] },
-                                        { $eq: ['$status', 'ACTIVE'] },
+                                        { $in: ['$status', ['ACTIVE', 'DEPOSITED', 'DRAFT']] },
                                         { $eq: ['$isDeleted', false] }
                                     ]
                                 }
@@ -297,9 +310,19 @@ export class RoomsService {
                     roomCode: 1,
                     roomName: 1,
                     floor: 1,
+                    area: 1,
+                    maxOccupancy: 1,
                     status: 1,
                     roomType: 1,
                     defaultRoomPrice: 1,
+                    defaultElectricPrice: 1,
+                    defaultWaterPrice: 1,
+                    defaultTermMonths: 1,
+                    shortTermPricingType: 1,
+                    hourlyPricingMode: 1,
+                    pricePerHour: 1,
+                    fixedPrice: 1,
+                    shortTermPrices: 1,
                     roomGroupId: {
                         _id: '$roomGroup._id',
                         name: '$roomGroup.name',
@@ -309,6 +332,20 @@ export class RoomsService {
                         _id: '$activeContractArr._id',
                         contractCode: '$activeContractArr.contractCode',
                         endDate: '$activeContractArr.endDate',
+                        contractType: '$activeContractArr.contractType',
+                        rentPrice: '$activeContractArr.rentPrice',
+                        shortTermPricingType: '$activeContractArr.shortTermPricingType',
+                        hourlyPricingMode: '$activeContractArr.hourlyPricingMode',
+                        pricePerHour: '$activeContractArr.pricePerHour',
+                        fixedPrice: '$activeContractArr.fixedPrice',
+                        electricityPrice: '$activeContractArr.electricityPrice',
+                        waterPrice: '$activeContractArr.waterPrice',
+                        serviceCharges: '$activeContractArr.serviceCharges',
+                        depositAmount: '$activeContractArr.depositAmount',
+                        startDate: '$activeContractArr.startDate',
+                        paymentCycle: '$activeContractArr.paymentCycle',
+                        paymentCycleMonths: '$activeContractArr.paymentCycleMonths',
+                        paymentDueDay: '$activeContractArr.paymentDueDay',
                         tenantId: {
                             _id: '$activeContractArr.tenant._id',
                             fullName: '$activeContractArr.tenant.fullName',

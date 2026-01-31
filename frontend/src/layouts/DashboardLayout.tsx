@@ -27,6 +27,7 @@ import {
     Monitor,
 } from 'lucide-react';
 import BuildingSelector from '@/components/BuildingSelector';
+import { NotificationDropdown } from '@/components/common/NotificationDropdown';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -108,7 +109,7 @@ export default function DashboardLayout() {
             {/* Top Navigation Bar - Fixed at top */}
             <header className={`
                 fixed top-0 left-0 right-0 z-50 h-14 lg:h-16 
-                border-b bg-white dark:bg-slate-950 shadow-sm 
+                border-b bg-background/80 backdrop-blur-md shadow-sm supports-[backdrop-filter]:bg-background/60
                 flex items-center px-3 lg:px-4
                 transition-transform duration-300 ease-in-out
                 lg:translate-x-0 ${sidebarOpen ? 'translate-x-72' : 'translate-x-0'}
@@ -117,7 +118,7 @@ export default function DashboardLayout() {
                 <div className="hidden lg:flex items-center gap-3 w-64 shrink-0">
                     <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
                         <img src="/logo.png" alt="Nhà Trọ Số" className="h-8 w-8" />
-                        <span className="font-bold text-slate-900 dark:text-white text-lg lg:text-xl tracking-tight">Nhà Trọ Số</span>
+                        <span className="font-bold text-foreground text-lg lg:text-xl tracking-tight">Nhà Trọ Số</span>
                     </Link>
                 </div>
 
@@ -143,6 +144,50 @@ export default function DashboardLayout() {
                 {/* Right Side Actions */}
                 <div className="flex items-center gap-2">
                     <BuildingSelector />
+                    <NotificationDropdown />
+
+                    {/* Desktop Theme & Language Actions */}
+                    <div className="hidden lg:flex items-center gap-1 mr-2">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full text-muted-foreground hover:text-foreground">
+                                    <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                                    <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                                    <span className="sr-only">Toggle theme</span>
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => setTheme("light")} className="cursor-pointer rounded-lg">
+                                    <Sun className="mr-2 h-4 w-4" />
+                                    <span>{t('settings.light', 'Light')}</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setTheme("dark")} className="cursor-pointer rounded-lg">
+                                    <Moon className="mr-2 h-4 w-4" />
+                                    <span>{t('settings.dark', 'Dark')}</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setTheme("system")} className="cursor-pointer rounded-lg">
+                                    <Monitor className="mr-2 h-4 w-4" />
+                                    <span>{t('settings.system', 'System')}</span>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-9 px-3 rounded-full font-medium text-muted-foreground hover:text-foreground">
+                                    {i18n.language === 'vi' ? 'VI' : 'EN'}
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => i18n.changeLanguage('vi')} className="cursor-pointer rounded-lg">
+                                    <span>🇻🇳 Tiếng Việt</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => i18n.changeLanguage('en')} className="cursor-pointer rounded-lg">
+                                    <span>🇺🇸 English</span>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
 
                     {/* Desktop User Dropdown */}
                     <div className="hidden lg:block">
@@ -198,7 +243,7 @@ export default function DashboardLayout() {
                 <aside
                     className={`
                         fixed lg:static inset-y-0 left-0 z-50 lg:z-40
-                        bg-white dark:bg-slate-950 border-r shadow-lg lg:shadow-none
+                        bg-background/95 backdrop-blur-xl border-r shadow-xl lg:shadow-none
                         transition-all duration-300 ease-in-out h-full w-72 lg:relative
                         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
                         ${isCollapsed ? 'lg:w-16' : 'lg:w-64'}
@@ -234,8 +279,8 @@ export default function DashboardLayout() {
                                             onClick={() => setSidebarOpen(false)}
                                             className={`
                                                 flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium
-                                                text-slate-600 dark:text-slate-400
-                                                hover:bg-primary/10 hover:text-primary dark:hover:text-primary
+                                                text-muted-foreground
+                                                hover:bg-primary/10 hover:text-primary
                                                 transition-all duration-200 group
                                                 ${isCollapsed ? 'lg:justify-center lg:px-2' : ''}
                                             `}
@@ -338,7 +383,7 @@ export default function DashboardLayout() {
                         <Button
                             variant="outline"
                             size="icon"
-                            className="h-full w-full rounded-full bg-white dark:bg-slate-950 shadow-md border-slate-200 dark:border-slate-800 pointer-events-none transition-all group-hover:bg-slate-50 dark:group-hover:bg-slate-900"
+                            className="h-full w-full rounded-full bg-background shadow-sm border border-border pointer-events-none transition-all group-hover:bg-muted"
                             tabIndex={-1}
                         >
                             {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}

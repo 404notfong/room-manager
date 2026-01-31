@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { formatPhoneNumber } from '@/lib/utils';
+import { formatPhoneNumber, cn, formatDate } from '@/lib/utils';
 
 interface ContractViewModalProps {
     open: boolean;
@@ -31,10 +31,7 @@ export default function ContractViewModal({ open, onOpenChange, contract }: Cont
         return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
     };
 
-    const formatDate = (date: string | undefined) => {
-        if (!date) return '-';
-        return new Date(date).toLocaleDateString('vi-VN');
-    };
+
 
     const getStatusBadge = (status: string) => {
         switch (status) {
@@ -45,7 +42,7 @@ export default function ContractViewModal({ open, onOpenChange, contract }: Cont
             case 'TERMINATED':
                 return <Badge className="bg-red-500 text-white border-0">{t('contracts.statusTerminated')}</Badge>;
             case 'DRAFT':
-                return <Badge className="bg-amber-500 text-white border-0">{t('contracts.statusDraft')}</Badge>;
+                return <Badge className="bg-orange-500 text-white border-0">{t('contracts.statusDraft')}</Badge>;
             default:
                 return <Badge variant="outline">{status}</Badge>;
         }
@@ -289,6 +286,7 @@ export default function ContractViewModal({ open, onOpenChange, contract }: Cont
                                             <tr className="border-b bg-slate-50">
                                                 <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-10">{t('common.stt')}</th>
                                                 <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">{t('contracts.serviceName')}</th>
+                                                <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">{t('contracts.recurrence')}</th>
                                                 <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">{t('contracts.quantity')}</th>
                                                 <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">{t('contracts.unitPrice')}</th>
                                                 <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">{t('common.total')}</th>
@@ -299,6 +297,14 @@ export default function ContractViewModal({ open, onOpenChange, contract }: Cont
                                                 <tr key={index} className="border-b last:border-b-0">
                                                     <td className="px-4 py-2.5 text-muted-foreground">{index + 1}</td>
                                                     <td className="px-4 py-2.5 font-medium">{service.name}</td>
+                                                    <td className="text-center px-4 py-2.5">
+                                                        <Badge variant="outline" className={cn(
+                                                            "font-normal text-[10px]",
+                                                            service.isRecurring ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-slate-50 text-slate-600 border-slate-200"
+                                                        )}>
+                                                            {service.isRecurring ? t('contracts.recurring') : t('contracts.oneTime')}
+                                                        </Badge>
+                                                    </td>
                                                     <td className="text-center px-4 py-2.5">{service.quantity || 1}</td>
                                                     <td className="text-right px-4 py-2.5">{formatCurrency(service.amount)}</td>
                                                     <td className="text-right px-4 py-2.5 font-semibold text-purple-600">
@@ -308,9 +314,11 @@ export default function ContractViewModal({ open, onOpenChange, contract }: Cont
                                             ))}
                                         </tbody>
                                         <tfoot>
-                                            <tr className="bg-purple-50">
-                                                <td colSpan={4} className="text-right px-4 py-2.5 font-semibold">{t('contracts.totalServiceAmount')}</td>
-                                                <td className="text-right px-4 py-2.5 font-bold text-purple-600">{formatCurrency(getTotalServices())}</td>
+                                            <tr className="bg-purple-50/50">
+                                                <td colSpan={4} className="text-right px-4 py-3 font-bold text-slate-700">{t('contracts.totalServiceAmount')}</td>
+                                                <td className="text-right px-4 py-3 font-black text-purple-700 text-lg tracking-tight bg-purple-100/50">
+                                                    {formatCurrency(getTotalServices())}
+                                                </td>
                                             </tr>
                                         </tfoot>
                                     </table>

@@ -60,13 +60,80 @@ export default function RegisterPage() {
         },
         onError: (error: any) => {
             console.error('Register error:', error);
-            const message = error.response?.data?.message || t('auth.registrationFailed');
-            setServerError(message);
+            const responseData = error.response?.data;
+            const message = responseData?.message;
+            const statusCode = responseData?.statusCode;
+
+            // Handle I18nValidationException errors (structured array in 'errors' field)
+            const validationErrors = responseData?.errors;
+            if (statusCode === 400 && Array.isArray(validationErrors)) {
+                validationErrors.forEach((err: any) => {
+                    if (err.property && err.constraints) {
+                        const firstConstraintKey = Object.keys(err.constraints)[0];
+                        const rawMessage = err.constraints[firstConstraintKey];
+                        // Clean up message if it contains pipe "|" (nestjs-i18n format)
+                        const message = rawMessage.split('|')[0];
+
+                        // Map specific fields
+                        if (['email', 'password', 'phone', 'fullName', 'confirmPassword'].includes(err.property)) {
+                            form.setError(err.property as any, { type: 'server', message: t(message) });
+                        }
+                    }
+                });
+                return;
+            }
+
+            // Handle standard NestJS ValidationPipe errors (array of messages in 'message' field)
+            if (statusCode === 400 && Array.isArray(message)) {
+                let generalErrors: string[] = [];
+
+                message.forEach((msg: string) => {
+                    // Try to map error to field based on keyword match if backend returns raw strings
+                    // Or if backend returns Check "field|message" format
+                    const lowerMsg = msg.toLowerCase();
+
+                    if (lowerMsg.includes('email')) {
+                        form.setError('email', { type: 'server', message: msg });
+                    } else if (lowerMsg.includes('password')) {
+                        form.setError('password', { type: 'server', message: msg });
+                    } else if (lowerMsg.includes('phone')) {
+                        form.setError('phone', { type: 'server', message: msg });
+                    } else if (lowerMsg.includes('name')) {
+                        form.setError('fullName', { type: 'server', message: msg });
+                    } else {
+                        generalErrors.push(msg);
+                    }
+                });
+
+                if (generalErrors.length > 0) {
+                    setServerError(generalErrors.join(', '));
+                }
+                return;
+            }
+
+            // Handle Conflict errors (e.g., Email/Phone exists)
+            if (statusCode === 409) {
+                if (typeof message === 'string') {
+                    if (message.toLowerCase().includes('email')) {
+                        form.setError('email', { type: 'manual', message: message });
+                        return;
+                    }
+                    if (message.toLowerCase().includes('phone')) {
+                        form.setError('phone', { type: 'manual', message: message });
+                        return;
+                    }
+                }
+                setServerError(message || t('auth.registrationFailed'));
+                return;
+            }
+
+            const fallbackMessage = typeof message === 'string' ? message : t('auth.registrationFailed');
+            setServerError(fallbackMessage);
             try {
                 toast({
                     variant: "destructive",
                     title: t('auth.registerError'),
-                    description: message,
+                    description: fallbackMessage,
                 });
             } catch (toastError) {
                 console.error('Toast error:', toastError);

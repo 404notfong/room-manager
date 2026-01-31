@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, DoorOpen, Search, Zap, Droplets } from 'lucide-react';
+import { Plus, Pencil, Trash2, DoorOpen, Search, Zap, Droplets, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -91,7 +91,7 @@ const roomsApi = {
         const { buildingId: _, ...updateData } = data;
         const cleanData = {
             ...updateData,
-            roomGroupId: updateData.roomGroupId || undefined,
+            roomGroupId: updateData.roomGroupId === '' ? null : (updateData.roomGroupId || undefined),
             description: updateData.description || undefined,
             area: updateData.area || undefined,
             maxOccupancy: updateData.maxOccupancy || undefined,
@@ -373,6 +373,23 @@ export default function RoomsPage() {
         return payload;
     };
 
+    const [duplicateData, setDuplicateData] = useState<Partial<RoomFormData> | undefined>(undefined);
+
+    const handleDuplicate = (room: Room) => {
+        const data = getEditDefaultValues(room);
+        setDuplicateData({
+            ...data,
+            roomName: `${data.roomName} - copy`,
+            status: 'AVAILABLE',
+        });
+        setIsAddOpen(true);
+    };
+
+    const handleAddClose = () => {
+        setIsAddOpen(false);
+        setDuplicateData(undefined);
+    };
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -381,9 +398,9 @@ export default function RoomsPage() {
                     <h1 className="text-3xl font-bold tracking-tight">{t('rooms.title')}</h1>
                     <p className="text-muted-foreground">{t('rooms.subtitle')}</p>
                 </div>
-                <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+                <Dialog open={isAddOpen} onOpenChange={(open) => open ? setIsAddOpen(true) : handleAddClose()}>
                     <DialogTrigger asChild>
-                        <Button>
+                        <Button onClick={() => setDuplicateData(undefined)}>
                             <Plus className="mr-2 h-4 w-4" />
                             {t('rooms.add')}
                         </Button>
@@ -399,8 +416,9 @@ export default function RoomsPage() {
                             <DialogDescription>{t('rooms.addDescription')}</DialogDescription>
                         </DialogHeader>
                         <RoomForm
+                            defaultValues={duplicateData}
                             onSubmit={(data) => createMutation.mutate(cleanRoomData(data))}
-                            onCancel={() => setIsAddOpen(false)}
+                            onCancel={handleAddClose}
                             isSubmitting={createMutation.isPending}
                             preselectedBuildingId={selectedBuildingId}
                         />
@@ -468,6 +486,9 @@ export default function RoomsPage() {
                                             <div className="flex items-center gap-1">
                                                 <Button variant="ghost" size="icon" onClick={() => handleEdit(room)}>
                                                     <Pencil className="h-4 w-4" />
+                                                </Button>
+                                                <Button variant="ghost" size="icon" onClick={() => handleDuplicate(room)} title={t('common.duplicate')}>
+                                                    <Copy className="h-4 w-4" />
                                                 </Button>
                                                 <Button variant="ghost" size="icon" onClick={() => handleDelete(room)} className="text-destructive hover:text-destructive">
                                                     <Trash2 className="h-4 w-4" />

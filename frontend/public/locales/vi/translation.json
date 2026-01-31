@@ -17,6 +17,7 @@
         "next": "Tiếp",
         "submit": "Gửi",
         "reset": "Đặt lại",
+        "duplicate": "Sao chép",
         "active": "Hoạt động",
         "collapse": "Thu gọn",
         "inactive": "Không hoạt động",
@@ -39,7 +40,22 @@
         "toggleColumns": "Ẩn/Hiện cột",
         "showAll": "Hiện tất cả",
         "hideAll": "Ẩn tất cả",
-        "resetColumns": "Đặt lại mặc định"
+        "resetColumns": "Đặt lại mặc định",
+        "pickDate": "Chọn ngày",
+        "rooms": "phòng",
+        "trip": "lượt",
+        "hour": "giờ",
+        "day": "ngày",
+        "month": "tháng",
+        "year": "năm"
+    },
+    "errors": {
+        "tooManyRequests": "Quá nhiều yêu cầu. Vui lòng thử lại sau {{seconds}} giây.",
+        "tooManyRequestsShort": "Quá nhiều yêu cầu. Vui lòng thử lại sau.",
+        "networkError": "Lỗi kết nối mạng",
+        "serverError": "Lỗi máy chủ",
+        "unauthorized": "Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.",
+        "forbidden": "Bạn không có quyền thực hiện hành động này"
     },
     "validation": {
         "required": "{{field}} là bắt buộc",
@@ -52,7 +68,13 @@
         "passwordsNotMatch": "Mật khẩu nhập lại không khớp",
         "rangeInvalid": "Khoảng kết thúc phải lớn hơn khoảng bắt đầu",
         "sequenceInvalid": "Khoảng bắt đầu phải bằng khoảng kết thúc của mức giá trước",
-        "lastEntryInfinite": "Mức giá cuối cùng phải có khoảng kết thúc là -1"
+        "lastEntryInfinite": "Mức giá cuối cùng phải có khoảng kết thúc là -1",
+        "EMAIL": "Email không hợp lệ",
+        "NOT_EMPTY": "Trường này không được để trống",
+        "STRING": "Phải là chuỗi ký tự",
+        "MIN_LENGTH": "Độ dài tối thiểu là {{constraints.0}} ký tự",
+        "PASSWORD_COMPLEXITY": "Mật khẩu phải chứa ít nhất 1 chữ hoa, 1 chữ thường và 1 số",
+        "PASSWORDS_NOT_MATCH": "Mật khẩu không khớp"
     },
     "theme": {
         "toggle": "Đổi giao diện",
@@ -123,11 +145,19 @@
         "occupied": "Đang thuê",
         "vacant": "Trống",
         "maintenance": "Bảo trì",
+        "deposited": "Đã cọc",
         "searchRooms": "Tìm phòng, khách thuê...",
         "filterByGroup": "Lọc theo nhóm",
         "groupsSelected": "nhóm đã chọn",
         "allGroups": "Tất cả nhóm",
         "ungrouped": "Không có nhóm",
+        "actions": {
+            "createContract": "Tạo hợp đồng",
+            "viewContract": "Xem hợp đồng",
+            "editRoom": "Chỉnh sửa phòng",
+            "maintenance": "Chuyển bảo trì",
+            "finishMaintenance": "Hoàn tất bảo trì"
+        },
         "createContract": "Tạo hợp đồng",
         "viewContract": "Xem hợp đồng",
         "noActiveContract": "Chưa có hợp đồng",
@@ -194,11 +224,20 @@
         "roomName": "Tên phòng",
         "building": "Tòa nhà",
         "roomGroup": "Nhóm phòng",
+        "noGroup": "Không có nhóm",
         "floor": "Tầng",
+        "floor_display": "Tầng {{floor}}",
         "area": "Diện tích (m²)",
         "maxOccupancy": "Số người tối đa",
         "description": "Mô tả",
-        "status": "Trạng thái",
+        "statusLabel": "Trạng thái",
+        "status": {
+            "AVAILABLE": "Trống",
+            "OCCUPIED": "Đã thuê",
+            "MAINTENANCE": "Bảo trì",
+            "DEPOSITED": "Đã cọc"
+        },
+        "listingWait": "Đang chờ niêm yết",
         "statusAvailable": "Trống",
         "statusOccupied": "Đã thuê",
         "statusMaintenance": "Bảo trì",
@@ -252,7 +291,12 @@
         "statusUpdated": "Cập nhật trạng thái phòng thành công",
         "clickToToggleStatus": "Click để đổi trạng thái",
         "label": "Phòng",
-        "select": "Chọn phòng"
+        "select": "Chọn phòng",
+        "selectBuildingFirst": "Chọn tòa nhà trước",
+        "roomNamePlaceholder": "Nhập tên phòng",
+        "floorPlaceholder": "Nhập số tầng",
+        "areaPlaceholder": "Nhập diện tích",
+        "maxOccupancyPlaceholder": "Nhập số người tối đa"
     },
     "tenants": {
         "title": "Quản lý khách thuê",
@@ -321,8 +365,16 @@
         "statusActive": "Đang hiệu lực",
         "statusExpired": "Hết hạn",
         "statusTerminated": "Đã chấm dứt",
-        "statusDraft": "Bản nháp",
+        "statusDraft": "Hợp đồng cọc",
         "saveAsDraft": "Lưu nháp",
+        "paymentDueDay": "Ngày thanh toán mỗi kỳ",
+        "paymentDay1": "Ngày 01",
+        "paymentDay5": "Ngày 05",
+        "paymentDay10": "Ngày 10",
+        "paymentDay15": "Ngày 15",
+        "paymentDay20": "Ngày 20",
+        "paymentDayLast": "Ngày cuối tháng",
+        "paymentDayCustom": "Tùy chọn (1-25)",
         "activate": "Kích hoạt",
         "activateTitle": "Kích hoạt hợp đồng",
         "activateDescription": "Xác nhận ngày bắt đầu và ngày kết thúc để kích hoạt hợp đồng nháp.",
@@ -374,6 +426,12 @@
         "totalServiceAmount": "Tổng tiền dịch vụ",
         "selectTenant": "Chọn khách thuê",
         "existingTenant": "Khách thuê có sẵn",
+        "daysRemaining": "Còn {{days}} ngày",
+        "hoursRemaining": "Còn {{hours}} giờ",
+        "checkIn": "Nhận phòng",
+        "checkOut": "Trả phòng",
+        "daysOverdue": "Quá {{days}} ngày",
+        "nextPayment": "Hạn thanh toán",
         "newTenant": "Khách thuê mới",
         "services": "Dịch vụ",
         "addService": "Thêm dịch vụ",
@@ -382,7 +440,6 @@
         "serviceName": "Tên dịch vụ",
         "serviceAmount": "Số tiền",
         "noServices": "Chưa có dịch vụ nào",
-        "paymentDueDay": "Ngày thanh toán",
         "predefinedServiceHint": "Dịch vụ hệ thống chỉ có thể sửa số lượng",
         "notes": "Ghi chú",
         "notesPlaceholder": "Nhập ghi chú cho hợp đồng...",
@@ -397,7 +454,27 @@
         "totalMonthly": "Tổng tiền hàng tháng",
         "totalPerCycle": "Tổng tiền / {{months}} tháng",
         "quantity": "Số lượng",
-        "exportPDF": "Xuất PDF"
+        "exportPDF": "Xuất PDF",
+        "shortTerm": "Ngắn hạn",
+        "longTerm": "Dài hạn",
+        "timeBlock": "Theo khung giờ",
+        "perHour": "Theo giờ",
+        "trip": "lượt",
+        "hour": "giờ",
+        "depositShort": "Cọc",
+        "nextPaymentShort": "Hạn TT",
+        "pricingTypes": {
+            "FIXED": "Cố định",
+            "TIME_BLOCK": "Block",
+            "HOURLY": "Theo giờ",
+            "DAILY": "Theo ngày"
+        },
+        "currentRate": "Đang áp dụng",
+        "guest": "Khách vãng lai",
+        "activeStay": "Thời gian ở",
+        "recurring": "Định kỳ",
+        "oneTime": "Một lần",
+        "recurrence": "Tần suất"
     },
     "invoices": {
         "title": "Quản lý hóa đơn",
@@ -472,6 +549,8 @@
         "deleteError": "Xóa nhóm thất bại"
     },
     "services": {
+        "electricity": "Điện",
+        "water": "Nước",
         "title": "Dịch vụ",
         "subtitle": "Quản lý các dịch vụ cho thuê phòng",
         "list": "Danh sách dịch vụ",
@@ -517,5 +596,11 @@
         "allSelected": "Đã chọn tất cả",
         "noBuildingsSelected": "Chưa chọn tòa nhà nào",
         "clearAll": "Xóa tất cả"
+    },
+    "notifications": {
+        "title": "Thông báo",
+        "empty": "Không có thông báo mới",
+        "viewAll": "Xem tất cả",
+        "markAllRead": "Đọc tất cả"
     }
 }

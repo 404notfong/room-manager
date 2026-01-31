@@ -1,12 +1,21 @@
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
+import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { DialogBody, DialogFooter } from '@/components/ui/dialog';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { DatePicker } from '@/components/ui/date-picker';
 import { useTenantSchema } from '@/lib/validations';
 
 export type TenantFormData = z.infer<ReturnType<typeof useTenantSchema>>;
@@ -29,6 +38,7 @@ export default function TenantForm({
 
     const {
         register,
+        control,
         handleSubmit,
         formState: { errors },
     } = useForm<TenantFormData>({
@@ -47,8 +57,18 @@ export default function TenantForm({
         },
     });
 
+    const handleFormSubmit = (data: TenantFormData) => {
+        // If status is RENTING or DEPOSITED (system managed), do not send it in update
+        if (data.status === 'RENTING' || data.status === 'DEPOSITED') {
+            const { status, ...rest } = data;
+            onSubmit(rest as TenantFormData);
+        } else {
+            onSubmit(data);
+        }
+    };
+
     return (
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
+        <form onSubmit={handleSubmit(handleFormSubmit)} className="flex flex-col flex-1 overflow-hidden">
             <DialogBody>
                 <div className="space-y-4">
                     {defaultValues?.code && (
@@ -111,26 +131,36 @@ export default function TenantForm({
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="dateOfBirth">{t('tenants.dateOfBirth')}</Label>
-                            <Input
-                                id="dateOfBirth"
-                                type="date"
-                                {...register('dateOfBirth')}
-                                defaultValue={defaultValues?.dateOfBirth || ''}
+                            <Controller
+                                control={control}
+                                name="dateOfBirth"
+                                render={({ field }) => (
+                                    <DatePicker
+                                        value={field.value}
+                                        onChange={(date) => field.onChange(date ? format(date, 'yyyy-MM-dd') : '')}
+                                        className={errors.dateOfBirth ? "border-destructive" : ""}
+                                    />
+                                )}
                             />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="gender">{t('tenants.gender')}</Label>
-                            <select
-                                id="gender"
-                                {...register('gender')}
-                                defaultValue={defaultValues?.gender || ''}
-                                className="flex h-10 w-full rounded-md border border-input bg-white dark:bg-slate-900 px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                            >
-                                <option value="">{t('tenants.selectGender')}</option>
-                                <option value="MALE">{t('tenants.genderMale')}</option>
-                                <option value="FEMALE">{t('tenants.genderFemale')}</option>
-                                <option value="OTHER">{t('tenants.genderOther')}</option>
-                            </select>
+                            <Controller
+                                control={control}
+                                name="gender"
+                                render={({ field }) => (
+                                    <Select onValueChange={field.onChange} value={field.value}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder={t('tenants.selectGender')} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="MALE">{t('tenants.genderMale')}</SelectItem>
+                                            <SelectItem value="FEMALE">{t('tenants.genderFemale')}</SelectItem>
+                                            <SelectItem value="OTHER">{t('tenants.genderOther')}</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                )}
+                            />
                         </div>
                     </div>
 
@@ -146,22 +176,31 @@ export default function TenantForm({
 
                     <div className="space-y-2">
                         <Label htmlFor="status">{t('common.status')}</Label>
-                        <select
-                            id="status"
-                            {...register('status')}
-                            defaultValue={defaultValues?.status || 'ACTIVE'}
-                            className="flex h-10 w-full rounded-md border border-input bg-white dark:bg-slate-900 px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:bg-muted disabled:opacity-50"
-                            disabled={defaultValues?.status === 'RENTING' || defaultValues?.status === 'DEPOSITED'}
-                        >
-                            <option value="ACTIVE">{t('tenants.statusActive')}</option>
-                            <option value="CLOSED">{t('tenants.statusClosed')}</option>
-                            {defaultValues?.status === 'RENTING' && (
-                                <option value="RENTING">{t('tenants.statusRenting')}</option>
+                        <Controller
+                            control={control}
+                            name="status"
+                            render={({ field }) => (
+                                <Select
+                                    onValueChange={field.onChange}
+                                    value={field.value}
+                                    disabled={defaultValues?.status === 'RENTING' || defaultValues?.status === 'DEPOSITED'}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder={t('tenants.selectStatus')} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="ACTIVE">{t('tenants.statusActive')}</SelectItem>
+                                        <SelectItem value="CLOSED">{t('tenants.statusClosed')}</SelectItem>
+                                        {defaultValues?.status === 'RENTING' && (
+                                            <SelectItem value="RENTING">{t('tenants.statusRenting')}</SelectItem>
+                                        )}
+                                        {defaultValues?.status === 'DEPOSITED' && (
+                                            <SelectItem value="DEPOSITED">{t('tenants.statusDeposited')}</SelectItem>
+                                        )}
+                                    </SelectContent>
+                                </Select>
                             )}
-                            {defaultValues?.status === 'DEPOSITED' && (
-                                <option value="DEPOSITED">{t('tenants.statusDeposited')}</option>
-                            )}
-                        </select>
+                        />
                         {(defaultValues?.status === 'RENTING' || defaultValues?.status === 'DEPOSITED') && (
                             <div className="flex flex-col gap-1 mt-1">
                                 <Badge

@@ -18,6 +18,7 @@ import { InvoicesModule } from '@modules/invoices/invoices.module';
 import { PaymentsModule } from '@modules/payments/payments.module';
 import { RoomGroupsModule } from '@modules/room-groups/room-groups.module';
 import { ServicesModule } from '@modules/services/services.module';
+import { NotificationsModule } from '@modules/notifications/notifications.module';
 import { AllExceptionsFilter } from '@common/filters/all-exceptions.filter';
 import { LoggingInterceptor } from '@common/interceptors/logging.interceptor';
 import { AppController } from './app.controller';
@@ -30,10 +31,10 @@ import { AppController } from './app.controller';
             envFilePath: '.env',
         }),
 
-        // Rate Limiting - Global: 10 requests per 60 seconds
+        // Rate Limiting - Global: 100 requests per 60 seconds (dev friendly)
         ThrottlerModule.forRoot([{
             ttl: 60000,
-            limit: 10,
+            limit: 100,
         }]),
         I18nModule.forRoot({
             fallbackLanguage: 'en',
@@ -94,6 +95,7 @@ import { AppController } from './app.controller';
         PaymentsModule,
         RoomGroupsModule,
         ServicesModule,
+        NotificationsModule,
     ],
     controllers: [AppController],
     providers: [

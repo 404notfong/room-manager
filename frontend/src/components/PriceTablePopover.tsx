@@ -17,9 +17,10 @@ interface PriceTablePopoverProps {
     pricingType?: 'HOURLY' | 'DAILY';
     unitLabel?: string;
     maxVisibleRows?: number;
+    highlightPrice?: boolean; // New prop to control text color
 }
 
-export function PriceTablePopover({ shortTermPrices, pricingType, unitLabel, maxVisibleRows = 3 }: PriceTablePopoverProps) {
+export function PriceTablePopover({ shortTermPrices, pricingType, unitLabel, maxVisibleRows = 3, highlightPrice = false }: PriceTablePopoverProps) {
     const { t } = useTranslation();
     const [isOpen, setIsOpen] = useState(false);
 
@@ -42,7 +43,7 @@ export function PriceTablePopover({ shortTermPrices, pricingType, unitLabel, max
                     : `${tier.fromValue}-${tier.toValue} ${unit}`
                 }
             </span>
-            <span className="font-medium text-xs">
+            <span className={`font-medium text-xs ${highlightPrice ? 'text-primary font-bold' : ''}`}>
                 {formatCurrency(tier.price)}
             </span>
         </div>
@@ -84,7 +85,7 @@ export function PriceTablePopover({ shortTermPrices, pricingType, unitLabel, max
                                                 : `${tier.fromValue} - ${tier.toValue} ${unit}`
                                             }
                                         </span>
-                                        <span className="font-medium text-right">
+                                        <span className={`text-right ${highlightPrice ? 'text-primary font-bold' : 'font-medium'}`}>
                                             {formatCurrency(tier.price)}
                                         </span>
                                     </div>

@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Building2, Check, ChevronsUpDown, Loader2 } from 'lucide-react';
+import { Building2, Check, ChevronDown, Loader2 } from 'lucide-react';
 import {
     Popover,
     PopoverContent,
@@ -20,11 +20,15 @@ import { useBuildingStore } from '@/stores/buildingStore';
 import apiClient from '@/api/client';
 import { useDebounce } from '@/hooks/useDebounce';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 
+// ... (fetchBuildings stays same)
 const fetchBuildings = async ({ pageParam = 1, search = '' }) => {
     const response = await apiClient.get(`/buildings?page=${pageParam}&limit=10&search=${search}`);
     return response.data;
 };
+
+// ... (Interface)
 interface BuildingSelectorProps {
     value?: string | null;
     onSelect?: (buildingId: string | null) => void;
@@ -37,7 +41,7 @@ export default function BuildingSelector({ value, onSelect, showAllOption = true
     const { t } = useTranslation();
     const { selectedBuildingId: storeSelectedBuildingId, setSelectedBuildingId: setStoreSelectedBuildingId } = useBuildingStore();
 
-    // Use props if provided, otherwise use store
+    // ... (rest of logic same until return)
     const selectedBuildingId = value !== undefined ? value : storeSelectedBuildingId;
     const setSelectedBuildingId = onSelect || setStoreSelectedBuildingId;
 
@@ -81,8 +85,6 @@ export default function BuildingSelector({ value, onSelect, showAllOption = true
 
     const buildings = data?.pages.flatMap((page: any) => page.data || []) || [];
 
-    // Separate query for current building to ensure name is always visible 
-    // even if it's not in the current search results
     const { data: selectedBuildingData } = useQuery({
         queryKey: ['building', selectedBuildingId],
         queryFn: async () => {
@@ -121,29 +123,49 @@ export default function BuildingSelector({ value, onSelect, showAllOption = true
                         role="combobox"
                         aria-expanded={open}
                         className={cn(
-                            "h-9 justify-between font-normal px-3",
+                            "h-10 justify-between font-normal px-3 transition-all duration-200 bg-card border-border rounded-lg",
                             onSelect ? "w-full" : "w-auto max-w-[140px] lg:max-w-[200px] lg:w-[200px]",
-                            error && "border-destructive focus-visible:ring-destructive"
+                            error && "border-destructive focus-visible:ring-destructive text-destructive"
                         )}
-                        disabled={disabled}
+                        disabled={disabled || (isLoading && !buildings.length)}
                     >
-                        <span className="truncate text-xs lg:text-sm">
-                            {selectedBuildingId
-                                ? selectedBuilding?.name || t('common.loading')
-                                : (showAllOption ? t('common.allBuildings') : t('buildings.select'))}
-                        </span>
-                        <ChevronsUpDown className="ml-1 lg:ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        <div className="flex items-center gap-2 truncate">
+                            {selectedBuildingId ? (
+                                selectedBuilding?.name ? (
+                                    <span className="truncate text-xs lg:text-sm font-medium">
+                                        {selectedBuilding.name}
+                                    </span>
+                                ) : (
+                                    <Skeleton className="h-4 w-20 lg:w-28" />
+                                )
+                            ) : (
+                                <span className="truncate text-xs lg:text-sm text-muted-foreground">
+                                    {showAllOption ? t('common.allBuildings') : t('buildings.select')}
+                                </span>
+                            )}
+                        </div>
+                        <ChevronDown className="ml-1 lg:ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                 </PopoverTrigger>
-                <PopoverContent className={cn("p-0", onSelect ? "w-[--radix-popover-trigger-width]" : "w-[200px]")} align="end">
-                    <Command shouldFilter={false}>
+                <PopoverContent className={cn("p-0 overflow-hidden rounded-lg", onSelect ? "w-[--radix-popover-trigger-width]" : "w-[240px]")} align="end">
+                    <Command shouldFilter={false} className="max-h-[350px]">
                         <CommandInput
                             placeholder={t('common.search')}
                             value={searchTerm}
                             onValueChange={setSearchTerm}
                         />
-                        <CommandList>
-                            <CommandEmpty>{isLoading ? t('common.loading') : t('common.noBuildings')}</CommandEmpty>
+                        <CommandList className="scrollbar-thin">
+                            {(isLoading && buildings.length === 0) ? (
+                                <div className="p-4 space-y-2">
+                                    <Skeleton className="h-4 w-full" />
+                                    <Skeleton className="h-4 w-[80%]" />
+                                    <Skeleton className="h-4 w-[90%]" />
+                                </div>
+                            ) : buildings.length === 0 && !isLoading ? (
+                                <CommandEmpty className="py-6 text-center text-muted-foreground text-sm">
+                                    {t('common.noBuildings')}
+                                </CommandEmpty>
+                            ) : null}
                             <CommandGroup>
                                 {showAllOption && (
                                     <CommandItem

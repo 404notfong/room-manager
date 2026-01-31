@@ -16,6 +16,15 @@ export default {
             },
         },
         extend: {
+            fontFamily: {
+                sans: ['"Be Vietnam Pro"', '"Noto Sans"', 'sans-serif'],
+                display: ['"Be Vietnam Pro"', 'sans-serif'], // For Headers
+            },
+            boxShadow: {
+                'nb-sm': '2px 2px 0px 0px hsl(var(--border))',
+                'nb': '4px 4px 0px 0px hsl(var(--border))',
+                'nb-lg': '6px 6px 0px 0px hsl(var(--border))',
+            },
             colors: {
                 border: "hsl(var(--border))",
                 input: "hsl(var(--input))",

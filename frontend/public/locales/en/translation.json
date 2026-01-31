@@ -17,6 +17,7 @@
         "next": "Next",
         "submit": "Submit",
         "reset": "Reset",
+        "duplicate": "Duplicate",
         "active": "Active",
         "inactive": "Inactive",
         "status": "Status",
@@ -38,7 +39,21 @@
         "toggleColumns": "Toggle Columns",
         "showAll": "Show All",
         "hideAll": "Hide All",
-        "resetColumns": "Reset to Default"
+        "resetColumns": "Reset to Default",
+        "rooms": "rooms",
+        "trip": "trip",
+        "hour": "hour",
+        "day": "day",
+        "month": "month",
+        "year": "year"
+    },
+    "errors": {
+        "tooManyRequests": "Too many requests. Please try again in {{seconds}} seconds.",
+        "tooManyRequestsShort": "Too many requests. Please try again later.",
+        "networkError": "Network error",
+        "serverError": "Server error",
+        "unauthorized": "Session expired. Please log in again.",
+        "forbidden": "You do not have permission to perform this action"
     },
     "validation": {
         "required": "{{field}} is required",
@@ -49,7 +64,13 @@
         "maxLength": "{{field}} must be at most {{max}} characters",
         "phone": "Invalid phone number format (e.g., 0901234567)",
         "passwordsNotMatch": "Passwords do not match",
-        "rangeInvalid": "End value must be greater than start value"
+        "rangeInvalid": "End value must be greater than start value",
+        "EMAIL": "Invalid email address",
+        "NOT_EMPTY": "This field cannot be empty",
+        "STRING": "Must be a string",
+        "MIN_LENGTH": "Minimum length is {{constraints.0}} characters",
+        "PASSWORD_COMPLEXITY": "Password must contain at least 1 uppercase, 1 lowercase, and 1 number",
+        "PASSWORDS_NOT_MATCH": "Passwords do not match"
     },
     "theme": {
         "toggle": "Toggle theme",
@@ -122,6 +143,12 @@
         "groupsSelected": "groups selected",
         "allGroups": "All Groups",
         "ungrouped": "Ungrouped",
+        "actions": {
+            "createContract": "Create Contract",
+            "viewContract": "View Contract",
+            "maintenance": "Set Maintenance",
+            "finishMaintenance": "Finish Maintenance"
+        },
         "createContract": "Create Contract",
         "viewContract": "View Contract",
         "noActiveContract": "No active contract",
@@ -188,11 +215,20 @@
         "roomName": "Room Name",
         "building": "Building",
         "roomGroup": "Room Group",
+        "noGroup": "No Group",
         "floor": "Floor",
+        "floor_display": "Floor {{floor}}",
         "area": "Area (m²)",
         "maxOccupancy": "Max Occupancy",
         "description": "Description",
-        "status": "Status",
+        "statusLabel": "Status",
+        "status": {
+            "AVAILABLE": "Available",
+            "OCCUPIED": "Occupied",
+            "MAINTENANCE": "Maintenance",
+            "DEPOSITED": "Deposited"
+        },
+        "listingWait": "Awaiting Listing",
         "statusAvailable": "Available",
         "statusOccupied": "Occupied",
         "statusMaintenance": "Maintenance",
@@ -243,7 +279,14 @@
         "statusUpdated": "Room status updated successfully",
         "clickToToggleStatus": "Click to toggle status",
         "label": "Room",
-        "select": "Select Room"
+        "select": "Select Room",
+        "selectBuildingFirst": "Select building first",
+        "roomNamePlaceholder": "Enter room name",
+        "floorPlaceholder": "Enter floor number",
+        "areaPlaceholder": "Enter area",
+        "maxOccupancyPlaceholder": "Enter max occupancy",
+        "roomTypeLongTermHint": "Monthly/long-term rental",
+        "roomTypeShortTermHint": "Hourly/daily rental"
     },
     "tenants": {
         "title": "Tenants",
@@ -367,7 +410,27 @@
         "totalMonthly": "Total Monthly",
         "totalPerCycle": "Total / {{months}} months",
         "quantity": "Quantity",
-        "exportPDF": "Export PDF"
+        "exportPDF": "Export PDF",
+        "shortTerm": "Short Term",
+        "longTerm": "Long Term",
+        "timeBlock": "Time Block",
+        "perHour": "Per Hour",
+        "trip": "trip",
+        "hour": "hour",
+        "depositShort": "Deposit",
+        "nextPaymentShort": "Due",
+        "pricingTypes": {
+            "FIXED": "Fixed",
+            "TIME_BLOCK": "Block",
+            "HOURLY": "Hourly",
+            "DAILY": "Daily"
+        },
+        "currentRate": "Current Rate",
+        "guest": "Guest",
+        "activeStay": "Stay Duration",
+        "recurring": "Recurring",
+        "oneTime": "One-time",
+        "recurrence": "Frequency"
     },
     "invoices": {
         "title": "Invoices",
@@ -442,6 +505,8 @@
         "deleteError": "Failed to delete group"
     },
     "services": {
+        "electricity": "Electricity",
+        "water": "Water",
         "title": "Services",
         "subtitle": "Manage services for your properties",
         "list": "Service List",

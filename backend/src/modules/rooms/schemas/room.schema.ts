@@ -45,6 +45,9 @@ export class Room {
     @Prop({ default: 0 })
     area: number;
 
+    @Prop({ default: 0 })
+    maxOccupancy: number;
+
     // Room type: Long-term (Trọ) or Short-term (Ngắn hạn)
     @Prop({ type: String, enum: RoomType, required: true, default: RoomType.LONG_TERM })
     roomType: RoomType;

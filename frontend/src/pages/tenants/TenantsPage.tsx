@@ -223,7 +223,7 @@ export default function TenantsPage() {
                         </Button>
                     </DialogTrigger>
                     <DialogContent
-                        className="max-w-md"
+                        className="max-w-2xl"
                         onPointerDownOutside={(e) => e.preventDefault()}
                         onEscapeKeyDown={(e) => e.preventDefault()}
                     >
@@ -374,7 +374,7 @@ export default function TenantsPage() {
             {/* Edit Dialog */}
             <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
                 <DialogContent
-                    className="max-w-md"
+                    className="max-w-2xl"
                     onPointerDownOutside={(e) => e.preventDefault()}
                     onEscapeKeyDown={(e) => e.preventDefault()}
                 >

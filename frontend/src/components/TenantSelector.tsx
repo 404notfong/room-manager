@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { User, Check, ChevronsUpDown, Loader2 } from 'lucide-react';
+import { User, Check, ChevronDown, Loader2 } from 'lucide-react';
 import {
     Popover,
     PopoverContent,
@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import apiClient from '@/api/client';
 import { useDebounce } from '@/hooks/useDebounce';
 import { cn, formatPhoneNumber } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const fetchTenants = async ({ pageParam = 1, search = '' }) => {
     const response = await apiClient.get(`/tenants?page=${pageParam}&limit=10&search=${search}&status=ACTIVE`);
@@ -105,31 +106,46 @@ export default function TenantSelector({ value, onSelect, disabled, error }: Ten
                     role="combobox"
                     aria-expanded={open}
                     className={cn(
-                        "w-full h-10 justify-between font-normal px-3 bg-white dark:bg-slate-900",
+                        "w-full h-10 justify-between font-normal px-3 bg-card border-border rounded-lg transition-all duration-200",
                         error && "border-destructive focus-visible:ring-destructive"
                     )}
-                    disabled={disabled}
+                    disabled={disabled || (isLoading && !tenants.length)}
                 >
                     <div className="flex items-center gap-2 truncate">
                         <User className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <span className="truncate">
-                            {value
-                                ? selectedTenant ? `${selectedTenant.fullName}${selectedTenant.phone ? ` - ${formatPhoneNumber(selectedTenant.phone)}` : ''}` : t('common.loading')
-                                : t('contracts.selectTenant')}
-                        </span>
+                        {value ? (
+                            selectedTenant?.fullName ? (
+                                <span className="truncate font-medium">
+                                    {selectedTenant.fullName}{selectedTenant.phone ? ` - ${formatPhoneNumber(selectedTenant.phone)}` : ''}
+                                </span>
+                            ) : (
+                                <Skeleton className="h-4 w-32" />
+                            )
+                        ) : (
+                            <span className="truncate text-muted-foreground">{t('contracts.selectTenant')}</span>
+                        )}
                     </div>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                <Command shouldFilter={false}>
+            <PopoverContent className="w-[--radix-popover-trigger-width] p-0 overflow-hidden" align="start">
+                <Command shouldFilter={false} className="max-h-[300px]">
                     <CommandInput
                         placeholder={t('common.search')}
                         value={searchTerm}
                         onValueChange={setSearchTerm}
                     />
-                    <CommandList>
-                        <CommandEmpty>{isLoading ? t('common.loading') : t('common.noData')}</CommandEmpty>
+                    <CommandList className="scrollbar-thin">
+                        {(isLoading && tenants.length === 0) ? (
+                            <div className="p-4 space-y-2">
+                                <Skeleton className="h-4 w-full" />
+                                <Skeleton className="h-4 w-[60%]" />
+                            </div>
+                        ) : tenants.length === 0 && !isLoading ? (
+                            <CommandEmpty className="py-6 text-center text-muted-foreground text-sm">
+                                {t('common.noData')}
+                            </CommandEmpty>
+                        ) : null}
                         <CommandGroup>
                             {tenants.map((tenant: any) => (
                                 <CommandItem

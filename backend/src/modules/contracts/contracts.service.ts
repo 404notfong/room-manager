@@ -317,7 +317,7 @@ export class ContractsService {
             _id: new Types.ObjectId(id),
             ownerId: new Types.ObjectId(ownerId),
             isDeleted: false,
-        }).populate('roomId tenantId').exec();
+        }).populate({ path: 'roomId', populate: { path: 'buildingId' } }).populate('tenantId').exec();
 
         if (!contract) throw new NotFoundException('Contract not found');
         return contract;
@@ -329,7 +329,7 @@ export class ContractsService {
             _id: new Types.ObjectId(id),
             ownerId: new Types.ObjectId(ownerId),
             isDeleted: false
-        }).populate('roomId').exec();
+        }).populate({ path: 'roomId', populate: { path: 'buildingId' } }).exec();
         if (!existingContract) throw new NotFoundException('Contract not found');
 
         // Only DRAFT contracts can be edited

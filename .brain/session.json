@@ -1,0 +1,67 @@
+{
+    "updated_at": "2026-01-30T01:50:00+07:00",
+    "working_on": {
+        "feature": "Room Status & Contract Polish",
+        "task": "Enhance Long Term card logic, validate status",
+        "status": "completed",
+        "files": [
+            "frontend/src/components/dashboard/RoomCard.tsx",
+            "backend/src/modules/rooms/rooms.service.ts",
+            "frontend/public/locales/vi/translation.json",
+            "frontend/src/pages/contracts/ContractForm.tsx"
+        ],
+        "notes": "Implemented robust date logic (date-fns), relocated Deposit info for Long Term, and added backend security for status changes."
+    },
+    "pending_tasks": [],
+    "recent_changes": [
+        {
+            "timestamp": "2026-01-30T01:45:00+07:00",
+            "type": "security",
+            "description": "Backend Security: Prevent manual status change for Occupied/Deposited rooms",
+            "files": [
+                "backend/src/modules/rooms/rooms.service.ts"
+            ]
+        },
+        {
+            "timestamp": "2026-01-30T01:30:00+07:00",
+            "type": "refactor",
+            "description": "RoomCard: Moved Deposit info to header (Long Term) & Refined Date Logic (date-fns)",
+            "files": [
+                "frontend/src/components/dashboard/RoomCard.tsx"
+            ]
+        },
+        {
+            "timestamp": "2026-01-30T01:15:00+07:00",
+            "type": "feat",
+            "description": "RoomCard: Added advanced date display (Next Payment, Overdue, Remaining Days)",
+            "files": [
+                "frontend/src/components/dashboard/RoomCard.tsx"
+            ]
+        },
+        {
+            "timestamp": "2026-01-30T00:30:00+07:00",
+            "type": "i18n",
+            "description": "Renamed 'Payment Due Day' label and added missing keys",
+            "files": [
+                "frontend/public/locales/vi/translation.json"
+            ]
+        }
+    ],
+    "errors_encountered": [
+        {
+            "error": "Fragile Date calculation using timestamps",
+            "solution": "Switched to `differenceInCalendarDays` from `date-fns` for robust day comparison",
+            "resolved": true
+        }
+    ],
+    "decisions_made": [
+        {
+            "decision": "Backend Strict Status Validation",
+            "reason": "UI restrictions are not enough; backend must prevent illegal status transitions for data integrity."
+        },
+        {
+            "decision": "Hybrid RoomCard Layout",
+            "reason": "Long Term cards need muted Deposit info (in header), while Short Term cards keep it prominent (at bottom)."
+        }
+    ]
+}

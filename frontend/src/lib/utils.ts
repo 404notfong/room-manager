@@ -28,3 +28,21 @@ export function formatPhoneNumber(phone: string | undefined): string {
     // Fallback for other lengths or failed match
     return phone;
 }
+
+export function formatCurrency(amount: number | undefined | null): string {
+    if (amount === undefined || amount === null) return '-';
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+}
+
+import { format } from "date-fns";
+
+export function formatDate(date: string | Date | undefined | null, formatStr: string = 'dd-MM-yyyy'): string {
+    if (!date) return '-';
+    try {
+        const d = new Date(date);
+        if (isNaN(d.getTime())) return '-';
+        return format(d, formatStr);
+    } catch (error) {
+        return '-';
+    }
+}

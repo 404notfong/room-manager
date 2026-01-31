@@ -1,0 +1,80 @@
+{
+    "meta": {
+        "schema_version": "1.1.0",
+        "awf_version": "3.3.0"
+    },
+    "project": {
+        "name": "Room Manager",
+        "type": "Monorepo (BMS - Boarding Management System)",
+        "status": "In Development"
+    },
+    "tech_stack": {
+        "frontend": {
+            "framework": "React 18 (Vite 5)",
+            "language": "TypeScript 5.3",
+            "state_management": "Zustand + React Query (TanStack)",
+            "ui_library": "Radix UI + Shadcn UI + TailwindCSS + Lucide Icons",
+            "form": "React Hook Form + Zod",
+            "router": "React Router DOM v6",
+            "date_picker": "react-day-picker v9 + date-fns"
+        },
+        "backend": {
+            "framework": "NestJS 10",
+            "database": "MongoDB (Mongoose)",
+            "language": "TypeScript",
+            "auth": "Passport + JWT (Access/Refresh Tokens)",
+            "security": "Helmet + Throttler",
+            "logging": "Winston"
+        }
+    },
+    "database_schema": {
+        "summary": "Document-based NoSQL database for managing boarding house entities",
+        "collections": [
+            "users (Auth & Profile)",
+            "rooms (Room details, pricing, status)",
+            "contracts (Tenant agreements, rental terms)",
+            "services (Utility services like electricity, water)",
+            "invoices (Monthly billing)",
+            "tenants (Tenant profiles)"
+        ]
+    },
+    "features": [
+        "Authentication (Login, Register, Refresh Token)",
+        "Role-based Access Control",
+        "Room Management (CRUD, Filtering, Status Tracking)",
+        "Contract Management (Create, Update, Validation)",
+        "Service Usage Recording",
+        "Automatic Invoice Generation",
+        "Dashboard Reporting & Statistics",
+        "Vietnamese Localization (i18n with date-fns locale)",
+        "Edit Room (Dashboard Inline)"
+    ],
+    "knowledge_items": {
+        "design_system": "Minimalist Pastel (Soft Gradient, Glassmorphism, Rounded UI, Soft Shadows)",
+        "patterns": [
+            "Service Layer Pattern in NestJS",
+            "Component-based Architecture in React",
+            "Mobile-first Responsive Design",
+            "Tailwind CSS Variables for Theming (Light/Dark Mode)",
+            "Shadcn UI component composition pattern",
+            "Hybrid DatePicker (Input + Calendar Popover) for manual entry",
+            "Consistent UI Styling: bg-card + border-border + rounded-lg for all inputs",
+            "Context-aware Dashboard Actions (e.g. Edit hidden on Occupied)"
+        ],
+        "gotchas": [
+            "Contract validation requires strict date handling",
+            "MongoDB ObjectId handling in DTOs",
+            "Input background transparency issues on white cards (Fixed with bg-input)",
+            "react-day-picker v8 flex layout causes misalignment with localized day names",
+            "Calendar today styling should use ring on button, not bg on cell",
+            "react-day-picker v9 uses different API: getDefaultClassNames(), DayButton component"
+        ],
+        "conventions": [
+            "Date format: dd-MM-yyyy (Vietnamese standard)",
+            "Calendar uses CSS variable --cell-size for consistent sizing",
+            "Auto-format date inputs with DD-MM-YYYY mask",
+            "Backend Security: Always validate status transitions server-side, not just UI",
+            "Hybrid Layout: RoomCard differentiates layout for Long Term vs Short Term"
+        ]
+    }
+}

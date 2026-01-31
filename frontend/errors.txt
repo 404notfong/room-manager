@@ -1,0 +1,5 @@
+﻿src/components/ActivateContractDialog.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/pages/contracts/ContractForm.tsx(505,21): error TS2353: Object literal may only specify known properties, and 'priceType' does not exist in type '{ name: string; amount: number; quantity: number; isRecurring: boolean; isPredefined?: boolean | undefined; serviceId?: string | undefined; } | { name: string; amount: number; quantity: number; isRecurring: boolean; isPredefined?: boolean | undefined; serviceId?: string | undefined; }[]'.
+src/pages/contracts/ContractsPage.tsx(88,10): error TS2614: Module '"@/components/ActivateContractDialog"' has no exported member 'ActivateContractDialog'. Did you mean to use 'import ActivateContractDialog from "@/components/ActivateContractDialog"' instead?
+src/pages/contracts/ContractsPage.tsx(507,33): error TS7006: Parameter 'data' implicitly has an 'any' type.
+src/pages/invoices/InvoicesPage.tsx(221,54): error TS2552: Cannot find name 'formatDate'. Did you mean 'FormData'?

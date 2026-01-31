@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +19,9 @@ import { useRoomSchema } from '@/lib/validations';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/api/client';
 import { Plus, Trash2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import { NumberInput } from '@/components/ui/number-input';
+import BuildingSelector from '@/components/BuildingSelector';
 
 export type RoomFormData = z.infer<ReturnType<typeof useRoomSchema>>;
 
@@ -44,16 +46,13 @@ export default function RoomForm({
     preselectedBuildingId,
     currentStatus,
 }: RoomFormProps) {
+    const [isCustomTerm, setIsCustomTerm] = useState(false);
     const { t } = useTranslation();
+    const { toast } = useToast();
     const schema = useRoomSchema();
 
-    const { data: buildings = [] } = useQuery({
-        queryKey: ['buildings'],
-        queryFn: async () => {
-            const res = await apiClient.get('/buildings');
-            return Array.isArray(res.data?.data) ? res.data.data : [];
-        },
-    });
+    // We use BuildingSelector instead of a standard select to handle pagination and loading states better
+    // This query is no longer needed since BuildingSelector handles it independently
 
     const { data: roomGroups = [] } = useQuery({
         queryKey: ['roomGroups'],
@@ -78,7 +77,7 @@ export default function RoomForm({
     } = useForm<RoomFormData>({
         resolver: zodResolver(schema),
         defaultValues: {
-            buildingId: '',
+            buildingId: preselectedBuildingId || '',
             roomName: '',
             floor: 1,
             area: undefined,
@@ -114,12 +113,12 @@ export default function RoomForm({
 
     // Auto-select building if creating new room and building is pre-selected
     useEffect(() => {
-        if (!isEditing && preselectedBuildingId) {
+        if (!isEditing && preselectedBuildingId && !watch('buildingId')) {
             setValue('buildingId', preselectedBuildingId);
         }
-    }, [isEditing, preselectedBuildingId, setValue]);
+    }, [isEditing, preselectedBuildingId, setValue, watch]);
 
-    const termMonthOptions = [1, 2, 3, 6, 12];
+
 
     // Auto-scroll to first error when form is submitted with errors
     useEffect(() => {
@@ -172,7 +171,14 @@ export default function RoomForm({
     };
 
     return (
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
+        <form onSubmit={handleSubmit(onSubmit, (errors) => {
+            console.error('Form Validation Errors:', errors);
+            toast({
+                variant: 'destructive',
+                title: t('validation.error'),
+                description: t('validation.checkFields'),
+            });
+        })} className="flex flex-col flex-1 overflow-hidden">
             <DialogBody>
                 <div className="space-y-4">
                     {/* Basic Info Section */}
@@ -183,22 +189,13 @@ export default function RoomForm({
                                 name="buildingId"
                                 control={control}
                                 render={({ field }) => (
-                                    <Select
-                                        onValueChange={field.onChange}
+                                    <BuildingSelector
                                         value={field.value}
+                                        onSelect={field.onChange}
                                         disabled={isEditing || (!!preselectedBuildingId && !isEditing)}
-                                    >
-                                        <SelectTrigger className={errors.buildingId ? 'border-destructive' : ''}>
-                                            <SelectValue placeholder={t('rooms.selectBuilding')} />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {buildings.map((b: any) => (
-                                                <SelectItem key={b._id} value={b._id}>
-                                                    {b.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                        error={!!errors.buildingId}
+                                        showAllOption={false}
+                                    />
                                 )}
                             />
                             {errors.buildingId && (
@@ -219,6 +216,7 @@ export default function RoomForm({
                             <Input
                                 id="roomName"
                                 {...register('roomName')}
+                                placeholder={t('rooms.roomNamePlaceholder')}
                                 className={errors.roomName ? 'border-destructive' : ''}
                             />
                             {errors.roomName && (
@@ -232,6 +230,7 @@ export default function RoomForm({
                                 id="floor"
                                 type="number"
                                 {...register('floor', { valueAsNumber: true })}
+                                placeholder={t('rooms.floorPlaceholder')}
                                 className={errors.floor ? 'border-destructive' : ''}
                             />
                             {errors.floor && (
@@ -249,6 +248,7 @@ export default function RoomForm({
                                         id="area"
                                         value={field.value ?? undefined}
                                         onChange={field.onChange}
+                                        placeholder={t('rooms.areaPlaceholder')}
                                     />
                                 )}
                             />
@@ -264,6 +264,7 @@ export default function RoomForm({
                                         id="maxOccupancy"
                                         value={field.value ?? undefined}
                                         onChange={field.onChange}
+                                        placeholder={t('rooms.maxOccupancyPlaceholder')}
                                     />
                                 )}
                             />
@@ -272,7 +273,7 @@ export default function RoomForm({
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label htmlFor="status">{t('rooms.status')}</Label>
+                            <Label htmlFor="status">{t('rooms.statusLabel')}</Label>
                             <Controller
                                 name="status"
                                 control={control}
@@ -309,11 +310,17 @@ export default function RoomForm({
                                 name="roomGroupId"
                                 control={control}
                                 render={({ field }) => (
-                                    <Select onValueChange={field.onChange} value={field.value || undefined}>
+                                    <Select
+                                        onValueChange={(value) => field.onChange(value === 'unassigned' ? '' : value)}
+                                        value={field.value || 'unassigned'}
+                                    >
                                         <SelectTrigger>
                                             <SelectValue placeholder={t('rooms.selectGroup')} />
                                         </SelectTrigger>
                                         <SelectContent>
+                                            <SelectItem value="unassigned" className="text-muted-foreground italic">
+                                                {t('rooms.noGroup')}
+                                            </SelectItem>
                                             {roomGroups.map((g: any) => (
                                                 <SelectItem key={g._id} value={g._id}>
                                                     {g.name}
@@ -412,23 +419,55 @@ export default function RoomForm({
                                     <Controller
                                         name="defaultTermMonths"
                                         control={control}
-                                        render={({ field }) => (
-                                            <Select
-                                                onValueChange={(v) => field.onChange(parseInt(v))}
-                                                value={field.value?.toString()}
-                                            >
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder={t('rooms.selectTermMonths')} />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {termMonthOptions.map((m) => (
-                                                        <SelectItem key={m} value={m.toString()}>
-                                                            {m} {t('rooms.months')}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        )}
+                                        render={({ field }) => {
+                                            const standardOptions = [1, 2, 3, 6, 12];
+                                            const currentValue = field.value ?? 1; // Default to 1 if undefined
+
+                                            // Custom is active if:
+                                            // 1. User explicitly enabled it (isCustomTerm is true)
+                                            // 2. OR the current value is NOT standard
+                                            const isCustom = isCustomTerm || !standardOptions.includes(currentValue);
+                                            const selectValue = isCustom ? 'custom' : currentValue.toString();
+
+                                            return (
+                                                <div className="flex gap-2">
+                                                    <Select
+                                                        value={selectValue}
+                                                        onValueChange={(v) => {
+                                                            if (v === 'custom') {
+                                                                setIsCustomTerm(true);
+                                                                // Keep current value, user will edit it
+                                                            } else {
+                                                                setIsCustomTerm(false);
+                                                                field.onChange(parseInt(v));
+                                                            }
+                                                        }}
+                                                    >
+                                                        <SelectTrigger className="flex-1">
+                                                            <SelectValue placeholder={t('rooms.selectTermMonths')} />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="1">{t('contracts.cycleMonthly')}</SelectItem>
+                                                            <SelectItem value="2">{t('contracts.cycleMonthly2')}</SelectItem>
+                                                            <SelectItem value="3">{t('contracts.cycleQuarterly')}</SelectItem>
+                                                            <SelectItem value="6">{t('contracts.cycleHalfYearly')}</SelectItem>
+                                                            <SelectItem value="12">{t('contracts.cycleYearly')}</SelectItem>
+                                                            <SelectItem value="custom">{t('contracts.cycleCustom')}</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                    {isCustom && (
+                                                        <div className="w-24">
+                                                            <NumberInput
+                                                                value={field.value}
+                                                                onChange={field.onChange}
+                                                                min={1}
+                                                                placeholder={t('rooms.months')}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        }}
                                     />
                                 </div>
                             </div>

@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { NumberInput } from '@/components/ui/number-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogBody, DialogFooter } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -28,6 +28,8 @@ import BuildingSelector from '@/components/BuildingSelector';
 import RoomSelector from '@/components/RoomSelector';
 import TenantSelector from '@/components/TenantSelector';
 import { useContractSchema } from '@/lib/validations';
+import { DatePicker } from '@/components/ui/date-picker';
+import { format } from 'date-fns';
 
 type ContractFormValues = z.infer<ReturnType<typeof useContractSchema>>;
 
@@ -127,6 +129,11 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                 form.setValue('hourlyPricingMode', room.hourlyPricingMode);
                 form.setValue('pricePerHour', room.pricePerHour || 0);
                 form.setValue('fixedPrice', room.fixedPrice || 0);
+                if (room.shortTermPrices && room.shortTermPrices.length > 0) {
+                    replacePrices(room.shortTermPrices);
+                } else {
+                    replacePrices([]);
+                }
             }
             form.setValue('roomId', room._id, { shouldValidate: true });
         }
@@ -136,7 +143,7 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
     useEffect(() => {
         if (contract && open) {
             form.reset({
-                buildingId: contract.roomId?.buildingId?._id || contract.buildingId || '',
+                buildingId: contract.roomId?.buildingId?._id || (typeof contract.roomId?.buildingId === 'string' ? contract.roomId.buildingId : '') || contract.buildingId || '',
                 roomId: contract.roomId?._id || contract.roomId || '',
                 tenantId: contract.tenantId?._id || contract.tenantId || '',
                 startDate: contract.startDate ? new Date(contract.startDate).toISOString().split('T')[0] : '',
@@ -161,7 +168,7 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                 fixedPrice: contract.fixedPrice || 0,
                 shortTermPrices: contract.shortTermPrices || []
             });
-            setSelectedBuilding(contract.roomId?.buildingId?._id || contract.buildingId || '');
+            setSelectedBuilding(contract.roomId?.buildingId?._id || (typeof contract.roomId?.buildingId === 'string' ? contract.roomId.buildingId : '') || contract.buildingId || '');
             setActiveTab('existing');
         } else if (!contract && open && !preSelectedRoomId) {
             form.reset({
@@ -343,10 +350,18 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
             delete payload.tenantId;
             delete payload.roomId;
             delete payload.buildingId;
+            // Clean up service charges metadata
+            if (payload.serviceCharges) {
+                payload.serviceCharges = payload.serviceCharges.map((s: any) => {
+                    const { priceType, priceTiers, ...rest } = s;
+                    return rest;
+                });
+            }
             return (await apiClient.put(`/contracts/${id}`, payload)).data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['contracts'] });
+            queryClient.invalidateQueries({ queryKey: ['rooms-dashboard'] }); // Refresh dashboard
             toast({ title: t('common.success') });
             onOpenChange(false);
             form.reset();
@@ -372,11 +387,19 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                 if (!payload.newTenant.email) delete payload.newTenant.email;
                 if (!payload.newTenant.permanentAddress) delete payload.newTenant.permanentAddress;
             }
+            // Clean up service charges metadata
+            if (payload.serviceCharges) {
+                payload.serviceCharges = payload.serviceCharges.map((s: any) => {
+                    const { priceType, priceTiers, ...rest } = s;
+                    return rest;
+                });
+            }
             return (await apiClient.post('/contracts', payload)).data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['contracts'] });
             queryClient.invalidateQueries({ queryKey: ['rooms'] }); // Update room status
+            queryClient.invalidateQueries({ queryKey: ['rooms-dashboard'] }); // Refresh dashboard
             queryClient.invalidateQueries({ queryKey: ['tenants'] }); // New tenant
             toast({ title: t('common.success') });
             onOpenChange(false);
@@ -522,10 +545,20 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
 
                 <DialogHeader>
                     <DialogTitle>{contract ? t('contracts.editTitle') : t('contracts.createTitle')}</DialogTitle>
+                    <DialogDescription className="sr-only">
+                        {contract ? t('contracts.editDescription') : t('contracts.createDescription')}
+                    </DialogDescription>
                 </DialogHeader>
 
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
+                    <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
+                        console.error('Form validation errors:', errors);
+                        toast({
+                            variant: "destructive",
+                            title: t('common.error'),
+                            description: "Vui lòng kiểm tra lại thông tin nhập liệu"
+                        });
+                    })} className="flex flex-col flex-1 overflow-hidden">
                         <DialogBody>
 
                             <div className="flex gap-6 flex-col md:flex-row">
@@ -1106,6 +1139,66 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                                                         )}
                                                     />
                                                 )}
+
+                                                {/* Payment Due Day */}
+                                                {roomType === 'LONG_TERM' && (
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="paymentDueDay"
+                                                        render={({ field }) => {
+                                                            const value = field.value;
+                                                            const isCustom = ![1, 5, 10, 15, 20, 31].includes(value || 0);
+
+                                                            return (
+                                                                <FormItem>
+                                                                    <FormLabel>{t('contracts.paymentDueDay')} <span className="text-destructive">*</span></FormLabel>
+                                                                    <div className="flex gap-2">
+                                                                        <Select
+                                                                            value={isCustom ? 'CUSTOM' : (value?.toString() || '1')}
+                                                                            onValueChange={(val) => {
+                                                                                if (val !== 'CUSTOM') {
+                                                                                    field.onChange(parseInt(val));
+                                                                                } else {
+                                                                                    // Default to 1 if switching to custom
+                                                                                    field.onChange(1);
+                                                                                }
+                                                                            }}
+                                                                        >
+                                                                            <FormControl>
+                                                                                <SelectTrigger className="flex-1">
+                                                                                    <SelectValue />
+                                                                                </SelectTrigger>
+                                                                            </FormControl>
+                                                                            <SelectContent>
+                                                                                <SelectItem value="1">{t('contracts.paymentDay1')}</SelectItem>
+                                                                                <SelectItem value="5">{t('contracts.paymentDay5')}</SelectItem>
+                                                                                <SelectItem value="10">{t('contracts.paymentDay10')}</SelectItem>
+                                                                                <SelectItem value="15">{t('contracts.paymentDay15')}</SelectItem>
+                                                                                <SelectItem value="20">{t('contracts.paymentDay20')}</SelectItem>
+                                                                                <SelectItem value="31">{t('contracts.paymentDayLast')}</SelectItem>
+                                                                                <SelectItem value="CUSTOM" className="text-primary font-medium">{t('contracts.paymentDayCustom')}</SelectItem>
+                                                                            </SelectContent>
+                                                                        </Select>
+                                                                        {isCustom && (
+                                                                            <NumberInput
+                                                                                value={value}
+                                                                                onChange={(val) => {
+                                                                                    // Enforce 1-25 range for custom input
+                                                                                    if (val !== undefined && val >= 1 && val <= 25) {
+                                                                                        field.onChange(val);
+                                                                                    }
+                                                                                }}
+                                                                                className="w-24"
+                                                                                placeholder="1-25"
+                                                                            />
+                                                                        )}
+                                                                    </div>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            );
+                                                        }}
+                                                    />
+                                                )}
                                             </div>
 
                                             <div className="grid grid-cols-2 gap-4">
@@ -1113,12 +1206,14 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                                                     control={form.control}
                                                     name="startDate"
                                                     render={({ field, fieldState }) => (
-                                                        <FormItem>
+                                                        <FormItem className="flex flex-col">
                                                             <FormLabel>{t('contracts.startDate')} <span className="text-destructive">*</span></FormLabel>
                                                             <FormControl>
-                                                                <Input
-                                                                    type="date"
-                                                                    {...field}
+                                                                <DatePicker
+                                                                    value={field.value}
+                                                                    onChange={(date) => {
+                                                                        field.onChange(date ? format(date, 'yyyy-MM-dd') : '');
+                                                                    }}
                                                                     className={cn(fieldState.error && "border-destructive focus-visible:ring-destructive")}
                                                                 />
                                                             </FormControl>
@@ -1131,12 +1226,14 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                                                     name="endDate"
                                                     render={({ field, fieldState }) => {
                                                         return (
-                                                            <FormItem>
+                                                            <FormItem className="flex flex-col">
                                                                 <FormLabel>{t('contracts.endDate')}</FormLabel>
                                                                 <FormControl>
-                                                                    <Input
-                                                                        type="date"
-                                                                        {...field}
+                                                                    <DatePicker
+                                                                        value={field.value}
+                                                                        onChange={(date) => {
+                                                                            field.onChange(date ? format(date, 'yyyy-MM-dd') : undefined);
+                                                                        }}
                                                                         className={cn(fieldState.error && "border-destructive focus-visible:ring-destructive")}
                                                                     />
                                                                 </FormControl>
@@ -1523,18 +1620,20 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                                 {t('common.cancel')}
                             </Button>
-                            <Button
-                                type="submit"
-                                variant="secondary"
-                                disabled={createMutation.isPending || updateMutation.isPending}
-                                onClick={() => {
-                                    isDraftRef.current = true;
-                                    setIsDraft(true);
-                                }}
-                            >
-                                {((createMutation.isPending || updateMutation.isPending) && isDraft) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                {t('contracts.saveAsDraft')}
-                            </Button>
+                            {(!contract || contract.status === 'DRAFT') && (
+                                <Button
+                                    type="submit"
+                                    variant="secondary"
+                                    disabled={createMutation.isPending || updateMutation.isPending}
+                                    onClick={() => {
+                                        isDraftRef.current = true;
+                                        setIsDraft(true);
+                                    }}
+                                >
+                                    {((createMutation.isPending || updateMutation.isPending) && isDraft) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    {!contract ? t('contracts.depositShort') : t('common.save')}
+                                </Button>
+                            )}
                             <Button
                                 type="submit"
                                 disabled={createMutation.isPending || updateMutation.isPending}
@@ -1544,7 +1643,7 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                                 }}
                             >
                                 {((createMutation.isPending || updateMutation.isPending) && !isDraft) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                {contract ? t('contracts.activate') : t('common.create')}
+                                {contract ? (contract.status === 'ACTIVE' ? t('common.save') : t('contracts.activate')) : t('common.create')}
                             </Button>
                         </DialogFooter>
 

@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Check, ChevronsUpDown, Loader2 } from 'lucide-react';
+import { Check, ChevronDown, Loader2 } from 'lucide-react';
 import {
     Popover,
     PopoverContent,
@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import apiClient from '@/api/client';
 import { useDebounce } from '@/hooks/useDebounce';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface RoomSelectorProps {
     buildingId: string;
@@ -113,29 +114,46 @@ export default function RoomSelector({ buildingId, value, onSelect, disabled, st
                     role="combobox"
                     aria-expanded={open}
                     className={cn(
-                        "h-9 w-full justify-between font-normal px-3 flex",
+                        "h-10 w-full justify-between font-normal px-3 flex transition-all duration-200 bg-card border-border rounded-lg",
                         error && "border-destructive focus-visible:ring-destructive",
                         !value && "text-muted-foreground"
                     )}
-                    disabled={disabled || !buildingId}
+                    disabled={disabled || !buildingId || (isLoading && !rooms.length)}
                 >
-                    <span className="truncate">
-                        {value
-                            ? selectedRoom?.roomName || t('common.loading')
-                            : t('rooms.select')}
-                    </span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    <div className="flex items-center gap-2 truncate">
+                        {value ? (
+                            selectedRoom?.roomName ? (
+                                <span className="truncate font-medium">{selectedRoom.roomName}</span>
+                            ) : (
+                                <Skeleton className="h-4 w-24" />
+                            )
+                        ) : (
+                            <span className="truncate text-muted-foreground">
+                                {buildingId ? t('rooms.select') : t('rooms.selectBuildingFirst', 'Chọn tòa nhà trước')}
+                            </span>
+                        )}
+                    </div>
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                <Command shouldFilter={false}>
+            <PopoverContent className="w-[--radix-popover-trigger-width] p-0 overflow-hidden rounded-lg">
+                <Command shouldFilter={false} className="max-h-[300px]">
                     <CommandInput
                         placeholder={t('common.search')}
                         value={searchTerm}
                         onValueChange={setSearchTerm}
                     />
-                    <CommandList>
-                        <CommandEmpty>{isLoading ? t('common.loading') : t('common.noData')}</CommandEmpty>
+                    <CommandList className="scrollbar-thin">
+                        {(isLoading && rooms.length === 0) ? (
+                            <div className="p-4 space-y-2">
+                                <Skeleton className="h-4 w-full" />
+                                <Skeleton className="h-4 w-[70%]" />
+                            </div>
+                        ) : rooms.length === 0 && !isLoading ? (
+                            <CommandEmpty className="py-6 text-center text-muted-foreground text-sm">
+                                {t('common.noData')}
+                            </CommandEmpty>
+                        ) : null}
                         <CommandGroup>
                             {rooms.map((room: any) => (
                                 <CommandItem

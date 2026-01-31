@@ -60,10 +60,12 @@ const roomGroupsApi = {
     },
     update: async (id: string, data: Partial<RoomGroupFormData>) => {
         // Clean up empty strings for optional fields
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { buildingId, ...rest } = data;
         const cleanData = {
-            ...data,
-            description: data.description || undefined,
-            color: data.color || undefined,
+            ...rest,
+            description: rest.description || undefined,
+            color: rest.color || undefined,
         };
         const response = await apiClient.put(`/room-groups/${id}`, cleanData);
         return response.data;

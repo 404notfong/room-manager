@@ -28,7 +28,19 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response?.status === 401) {
+        const status = error.response?.status;
+
+        // Handle 429 Too Many Requests
+        if (status === 429) {
+            const retryAfter = error.response?.headers?.['retry-after'];
+            const translatedMessage = retryAfter
+                ? i18n.t('errors.tooManyRequests', { seconds: retryAfter })
+                : i18n.t('errors.tooManyRequestsShort');
+            error.response.data.message = translatedMessage;
+        }
+
+        // Handle 401 Unauthorized
+        if (status === 401) {
             // Don't redirect if already on auth pages (login/register)
             const currentPath = window.location.pathname;
             const isAuthPage = currentPath === '/login' || currentPath === '/register';

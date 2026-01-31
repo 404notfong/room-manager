@@ -7,6 +7,9 @@ import apiClient from '@/api/client';
 import RoomStatusOverview from '@/components/dashboard/RoomStatusOverview';
 import ContractForm from '@/pages/contracts/ContractForm';
 import ContractViewModal from '@/components/ContractViewModal';
+import { ActivateContractDialog } from '@/components/ActivateContractDialog';
+import { toast } from '@/hooks/use-toast';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 // Fetch contract by ID for viewing
 const fetchContract = async (contractId: string) => {
@@ -16,6 +19,7 @@ const fetchContract = async (contractId: string) => {
 
 export default function DashboardPage() {
     const { t } = useTranslation();
+    const queryClient = useQueryClient();
 
     // Contract modal states
     const [isContractFormOpen, setIsContractFormOpen] = useState(false);
@@ -23,21 +27,54 @@ export default function DashboardPage() {
     const [isContractViewOpen, setIsContractViewOpen] = useState(false);
     const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
 
-    // Fetch contract data when viewing
+    // Edit & Activate states
+    const [isActivateOpen, setIsActivateOpen] = useState(false);
+    const [contractToActivate, setContractToActivate] = useState<{ _id: string; startDate: string; endDate?: string } | null>(null);
+    const [isEditMode, setIsEditMode] = useState(false);
+
+    // Fetch contract data when viewing or editing
     const { data: selectedContract } = useQuery({
         queryKey: ['contract', selectedContractId],
         queryFn: () => fetchContract(selectedContractId!),
-        enabled: !!selectedContractId && isContractViewOpen,
+        enabled: !!selectedContractId && (isContractViewOpen || isEditMode),
     });
+
+    const activateMutation = useMutation({
+        mutationFn: async ({ id, data }: { id: string, data: any }) => {
+            return (await apiClient.put(`/contracts/${id}/activate`, data)).data;
+        },
+        // onSuccess handled via callback in component
+    });
+
+    const handleActivateSuccess = () => {
+        queryClient.invalidateQueries({ queryKey: ['rooms-dashboard'] });
+        queryClient.invalidateQueries({ queryKey: ['rooms'] });
+        setIsActivateOpen(false);
+        setContractToActivate(null);
+        toast({ title: t('contracts.activateSuccess') });
+    };
 
     const handleCreateContract = (roomId: string) => {
         setSelectedRoomId(roomId);
         setIsContractFormOpen(true);
+        setIsEditMode(false);
+        setSelectedContractId(null);
     };
 
     const handleViewContract = (contractId: string) => {
         setSelectedContractId(contractId);
         setIsContractViewOpen(true);
+    };
+
+    const handleEditContract = (contractId: string) => {
+        setSelectedContractId(contractId);
+        setIsEditMode(true);
+        setIsContractFormOpen(true);
+    };
+
+    const handleActivateContract = (contract: { _id: string; startDate: string; endDate?: string }) => {
+        setContractToActivate(contract);
+        setIsActivateOpen(true);
     };
 
     const stats = [
@@ -105,6 +142,8 @@ export default function DashboardPage() {
             <RoomStatusOverview
                 onCreateContract={handleCreateContract}
                 onViewContract={handleViewContract}
+                onEditContract={handleEditContract}
+                onActivateContract={handleActivateContract}
             />
 
             {/* Contract Form Modal */}
@@ -112,9 +151,14 @@ export default function DashboardPage() {
                 open={isContractFormOpen}
                 onOpenChange={(open) => {
                     setIsContractFormOpen(open);
-                    if (!open) setSelectedRoomId(null);
+                    if (!open) {
+                        setSelectedRoomId(null);
+                        setIsEditMode(false);
+                        setSelectedContractId(null);
+                    }
                 }}
                 preSelectedRoomId={selectedRoomId || undefined}
+                contract={isEditMode ? selectedContract : undefined}
             />
 
             {/* Contract View Modal */}
@@ -126,6 +170,25 @@ export default function DashboardPage() {
                     if (!open) setSelectedContractId(null);
                 }}
             />
+
+            {/* Activate Contract Dialog */}
+            {contractToActivate && (
+                <ActivateContractDialog
+                    isOpen={isActivateOpen}
+                    onClose={() => setIsActivateOpen(false)}
+                    initialData={{
+                        startDate: contractToActivate.startDate || new Date().toISOString(),
+                        endDate: contractToActivate.endDate,
+                    }}
+                    onConfirm={(data) => {
+                        activateMutation.mutate(
+                            { id: contractToActivate._id, data },
+                            { onSuccess: handleActivateSuccess, onError: (err: any) => toast({ variant: 'destructive', title: err.response?.data?.message || 'Error' }) }
+                        )
+                    }}
+                    isSubmitting={activateMutation.isPending}
+                />
+            )}
         </div>
     );
 }

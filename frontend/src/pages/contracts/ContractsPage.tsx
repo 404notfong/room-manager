@@ -31,7 +31,7 @@ import { useBuildingStore } from '@/stores/buildingStore';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useColumnVisibility, ColumnConfig } from '@/hooks/useColumnVisibility';
 import { ColumnVisibilityToggle } from '@/components/ColumnVisibilityToggle';
-import { formatPhoneNumber } from '@/lib/utils';
+import { formatPhoneNumber, formatDate } from '@/lib/utils';
 
 interface Contract {
     _id: string;
@@ -181,15 +181,13 @@ export default function ContractsPage() {
             case 'TERMINATED':
                 return <Badge className="bg-red-500 text-white border-0">{t('contracts.statusTerminated')}</Badge>;
             case 'DRAFT':
-                return <Badge className="bg-amber-500 text-white border-0">{t('contracts.statusDraft')}</Badge>;
+                return <Badge className="bg-orange-500 text-white border-0">{t('contracts.statusDraft')}</Badge>;
             default:
                 return <Badge variant="outline">{status}</Badge>;
         }
     };
 
-    const formatDate = (date: string) => {
-        return new Date(date).toLocaleDateString('vi-VN');
-    };
+
 
     const formatCurrency = (amount: number | undefined) => {
         if (amount === undefined || amount === null) return '-';
