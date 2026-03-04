@@ -1,12 +1,11 @@
-import { useEffect, useState } from 'react';
-import { useForm, Controller, useFieldArray } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useTranslation } from 'react-i18next';
-import { z } from 'zod';
+import apiClient from '@/api/client';
+import BuildingSelector from '@/components/BuildingSelector';
 import { Button } from '@/components/ui/button';
+import { DialogBody, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { NumberInput } from '@/components/ui/number-input';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
     Select,
     SelectContent,
@@ -14,14 +13,16 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { DialogBody, DialogFooter } from '@/components/ui/dialog';
-import { useRoomSchema } from '@/lib/validations';
-import { useQuery } from '@tanstack/react-query';
-import apiClient from '@/api/client';
-import { Plus, Trash2 } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { NumberInput } from '@/components/ui/number-input';
-import BuildingSelector from '@/components/BuildingSelector';
+import { useRoomSchema } from '@/lib/validations';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useQuery } from '@tanstack/react-query';
+import { Plus, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Controller, useFieldArray, useForm } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
+import { z } from 'zod';
 
 export type RoomFormData = z.infer<ReturnType<typeof useRoomSchema>>;
 
@@ -83,7 +84,7 @@ export default function RoomForm({
             area: undefined,
             maxOccupancy: undefined,
             status: 'AVAILABLE',
-            roomGroupId: '',
+            roomGroupId: undefined,
             description: '',
             roomType: 'LONG_TERM',
             defaultElectricPrice: 0,
@@ -94,11 +95,16 @@ export default function RoomForm({
             hourlyPricingMode: 'PER_HOUR',
             pricePerHour: 0,
             shortTermPrices: [
-                { fromValue: 0, toValue: 0, price: 0 },
-                { fromValue: 0, toValue: -1, price: 0 }
+                { fromValue: 1, toValue: 1, price: 0 },
+                { fromValue: 2, toValue: -1, price: 0 }
             ],
+            priceTableType: 'PROGRESSIVE',
             fixedPrice: 0,
             ...defaultValues,
+            // Ensure meter indexes are never undefined (older rooms or raw API responses
+            // may not include these fields, and spreading undefined overrides the 0 default)
+            currentElectricIndex: defaultValues?.currentElectricIndex ?? 0,
+            currentWaterIndex: defaultValues?.currentWaterIndex ?? 0,
         },
     });
 
@@ -132,13 +138,13 @@ export default function RoomForm({
         }
     }, [errors, isSubmitted]);
 
-    // Add new price tier with auto-linking
+    // Add new price tier with auto-linking (next tier starts at toValue + 1)
     const handleAddPriceTier = () => {
         if (fields.length === 0) {
-            // First tier: 0 - input
-            append({ fromValue: 0, toValue: 0, price: 0 });
+            // First tier: 1 - input
+            append({ fromValue: 1, toValue: 1, price: 0 });
             // Last tier: input - remaining
-            append({ fromValue: 0, toValue: -1, price: 0 });
+            append({ fromValue: 2, toValue: -1, price: 0 });
         } else {
             // Insert before the last "remaining" tier
             const lastIndex = fields.length - 1;
@@ -146,27 +152,26 @@ export default function RoomForm({
             const secondLastIndex = fields.length - 2;
             const prevEndValue = secondLastIndex >= 0 ? (fields[secondLastIndex].toValue as number) : 0;
 
-            // Update the last tier's fromValue when we add new tier
-            // Insert a new tier before the last one
-            const newFromValue = prevEndValue;
+            // New tier starts at prevEndValue + 1
+            const newFromValue = prevEndValue + 1;
 
             // Remove the last tier temporarily
             const lastTierData = { ...lastTier, fromValue: 0 };
             remove(lastIndex);
 
-            // Add new tier
+            // Add new tier (default toValue = fromValue for user to fill in)
             append({ fromValue: newFromValue, toValue: newFromValue, price: 0 });
 
-            // Re-add the last tier with updated fromValue
-            append({ fromValue: newFromValue, toValue: -1, price: lastTierData.price });
+            // Re-add the last tier with updated fromValue (new tier's toValue + 1, will be updated when user changes toValue)
+            append({ fromValue: newFromValue + 1, toValue: -1, price: lastTierData.price });
         }
     };
 
-    // Handle toValue change to update next tier's fromValue
+    // Handle toValue change to update next tier's fromValue (next tier starts at toValue + 1)
     const handleToValueChange = (index: number, value: number) => {
         const nextIndex = index + 1;
         if (nextIndex < fields.length) {
-            update(nextIndex, { ...fields[nextIndex], fromValue: value });
+            update(nextIndex, { ...fields[nextIndex], fromValue: value + 1 });
         }
     };
 
@@ -471,6 +476,46 @@ export default function RoomForm({
                                     />
                                 </div>
                             </div>
+
+                            {/* Current Meter Readings - Show for both create and edit */}
+                            <div className="border-t pt-4 mt-4">
+                                <Label className="text-base font-medium">{t('rooms.currentMeterReadings')}</Label>
+                                <p className="text-xs text-muted-foreground mb-4">
+                                    {isEditing ? t('rooms.currentMeterReadingsHint') : t('rooms.initialMeterReadingsHint')}
+                                </p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>{t('rooms.currentElectricIndex')}</Label>
+                                    <Controller
+                                        name="currentElectricIndex"
+                                        control={control}
+                                        render={({ field }) => (
+                                            <NumberInput
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                                min={0}
+                                                decimalScale={0}
+                                            />
+                                        )}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>{t('rooms.currentWaterIndex')}</Label>
+                                    <Controller
+                                        name="currentWaterIndex"
+                                        control={control}
+                                        render={({ field }) => (
+                                            <NumberInput
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                                min={0}
+                                                decimalScale={0}
+                                            />
+                                        )}
+                                    />
+                                </div>
+                            </div>
                         </div>
                     )}
 
@@ -563,7 +608,46 @@ export default function RoomForm({
 
                                     {/* Table Mode - Price tiers */}
                                     {hourlyPricingMode === 'TABLE' && (
-                                        <div className="space-y-2">
+                                        <div className="space-y-4">
+                                            {/* Price Table Type Selection */}
+                                            <div className="space-y-2">
+                                                <Label>{t('rooms.priceTableType')}</Label>
+                                                <Controller
+                                                    name="priceTableType"
+                                                    control={control}
+                                                    render={({ field }) => (
+                                                        <RadioGroup
+                                                            value={field.value || 'PROGRESSIVE'}
+                                                            onValueChange={field.onChange}
+                                                            className="flex flex-col gap-3"
+                                                        >
+                                                            <div className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                                                                <RadioGroupItem value="PROGRESSIVE" id="progressive" className="mt-0.5" />
+                                                                <div className="space-y-1">
+                                                                    <Label htmlFor="progressive" className="font-medium cursor-pointer">
+                                                                        {t('rooms.priceTableProgressive')}
+                                                                    </Label>
+                                                                    <p className="text-xs text-muted-foreground">
+                                                                        {t('rooms.priceTableProgressiveHint')}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                                                                <RadioGroupItem value="FLAT" id="flat" className="mt-0.5" />
+                                                                <div className="space-y-1">
+                                                                    <Label htmlFor="flat" className="font-medium cursor-pointer">
+                                                                        {t('rooms.priceTableFlat')}
+                                                                    </Label>
+                                                                    <p className="text-xs text-muted-foreground">
+                                                                        {t('rooms.priceTableFlatHint')}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </RadioGroup>
+                                                    )}
+                                                />
+                                            </div>
+
                                             <Label>{t('rooms.priceTable')}</Label>
                                             <div className="space-y-2">
                                                 {fields.map((field, index) => {
@@ -630,7 +714,7 @@ export default function RoomForm({
                                                                             const prevField = fields[index - 1];
                                                                             const nextField = fields[index + 1];
                                                                             if (nextField) {
-                                                                                update(index + 1, { ...nextField, fromValue: prevField.toValue as number });
+                                                                                update(index + 1, { ...nextField, fromValue: (prevField.toValue as number) + 1 });
                                                                             }
                                                                             remove(index);
                                                                         }}
@@ -665,7 +749,46 @@ export default function RoomForm({
 
                             {/* Daily Pricing - Price tiers table */}
                             {shortTermPricingType === 'DAILY' && (
-                                <div className="space-y-2">
+                                <div className="space-y-4">
+                                    {/* Price Table Type Selection */}
+                                    <div className="space-y-2">
+                                        <Label>{t('rooms.priceTableType')}</Label>
+                                        <Controller
+                                            name="priceTableType"
+                                            control={control}
+                                            render={({ field }) => (
+                                                <RadioGroup
+                                                    value={field.value || 'PROGRESSIVE'}
+                                                    onValueChange={field.onChange}
+                                                    className="flex flex-col gap-3"
+                                                >
+                                                    <div className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                                                        <RadioGroupItem value="PROGRESSIVE" id="daily-progressive" className="mt-0.5" />
+                                                        <div className="space-y-1">
+                                                            <Label htmlFor="daily-progressive" className="font-medium cursor-pointer">
+                                                                {t('rooms.priceTableProgressive')}
+                                                            </Label>
+                                                            <p className="text-xs text-muted-foreground">
+                                                                {t('rooms.priceTableProgressiveHintDaily')}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                                                        <RadioGroupItem value="FLAT" id="daily-flat" className="mt-0.5" />
+                                                        <div className="space-y-1">
+                                                            <Label htmlFor="daily-flat" className="font-medium cursor-pointer">
+                                                                {t('rooms.priceTableFlat')}
+                                                            </Label>
+                                                            <p className="text-xs text-muted-foreground">
+                                                                {t('rooms.priceTableFlatHintDaily')}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </RadioGroup>
+                                            )}
+                                        />
+                                    </div>
+
                                     <Label>{t('rooms.priceTable')}</Label>
                                     <div className="space-y-2">
                                         {fields.map((field, index) => {
@@ -732,7 +855,7 @@ export default function RoomForm({
                                                                     const prevField = fields[index - 1];
                                                                     const nextField = fields[index + 1];
                                                                     if (nextField) {
-                                                                        update(index + 1, { ...nextField, fromValue: prevField.toValue as number });
+                                                                        update(index + 1, { ...nextField, fromValue: (prevField.toValue as number) + 1 });
                                                                     }
                                                                     remove(index);
                                                                 }}

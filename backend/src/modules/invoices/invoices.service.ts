@@ -1,53 +1,348 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Invoice, InvoiceDocument } from '@modules/invoices/schemas/invoice.schema';
+import { ContractStatus, ContractType, InvoiceType, PriceTableType, ShortTermPricingType } from '@common/constants/enums';
+import { Contract, ContractDocument } from '@modules/contracts/schemas/contract.schema';
 import { CreateInvoiceDto, UpdateInvoiceDto } from '@modules/invoices/dto/invoice.dto';
+import { Invoice, InvoiceDocument } from '@modules/invoices/schemas/invoice.schema';
+import { Room, RoomDocument } from '@modules/rooms/schemas/room.schema';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { addMonths, getDaysInMonth, setDate } from 'date-fns';
+import { Model, Types } from 'mongoose';
 
 @Injectable()
 export class InvoicesService {
-    constructor(@InjectModel(Invoice.name) private invoiceModel: Model<InvoiceDocument>) { }
+    private readonly logger = new Logger(InvoicesService.name);
+
+    constructor(
+        @InjectModel(Invoice.name) private invoiceModel: Model<InvoiceDocument>,
+        @InjectModel(Contract.name) private contractModel: Model<ContractDocument>,
+        @InjectModel(Room.name) private roomModel: Model<RoomDocument>,
+    ) { }
+
+    /**
+     * Calculate the next payment date based on current startDate, paymentCycle, and paymentDueDay
+     */
+    private calculateNextPaymentDate(fromDate: Date, cycleMonths: number, dueDay: number): Date {
+        const targetMonth = addMonths(fromDate, cycleMonths);
+        const daysInTargetMonth = getDaysInMonth(targetMonth);
+        const actualDueDay = Math.min(dueDay, daysInTargetMonth);
+        return setDate(targetMonth, actualDueDay);
+    }
+
+    /**
+     * Calculate short-term rental amount based on pricing type and duration
+     * Supports: HOURLY (per hour or price table), DAILY (price table), FIXED (fixed price)
+     */
+    private calculateShortTermAmount(
+        contract: Contract,
+        totalHours: number,
+        totalDays: number
+    ): { amount: number; calculation: string } {
+        const pricingType = contract.shortTermPricingType;
+        
+        if (pricingType === ShortTermPricingType.FIXED) {
+            return {
+                amount: contract.fixedPrice || 0,
+                calculation: `Fixed price: ${contract.fixedPrice}`
+            };
+        }
+
+        if (pricingType === ShortTermPricingType.HOURLY) {
+            // Check if using simple per-hour or price table
+            if (contract.hourlyPricingMode === 'PER_HOUR') {
+                const amount = totalHours * (contract.pricePerHour || 0);
+                return {
+                    amount,
+                    calculation: `${totalHours} hours x ${contract.pricePerHour} = ${amount}`
+                };
+            }
+            
+            // Price table mode (progressive or flat)
+            return this.calculateFromPriceTable(
+                contract.shortTermPrices || [],
+                totalHours,
+                contract.priceTableType || PriceTableType.PROGRESSIVE,
+                'hours'
+            );
+        }
+
+        if (pricingType === ShortTermPricingType.DAILY) {
+            // Always uses price table for daily
+            return this.calculateFromPriceTable(
+                contract.shortTermPrices || [],
+                totalDays,
+                contract.priceTableType || PriceTableType.PROGRESSIVE,
+                'days'
+            );
+        }
+
+        return { amount: 0, calculation: 'Unknown pricing type' };
+    }
+
+    /**
+     * Calculate amount from price table using progressive or flat pricing
+     */
+    private calculateFromPriceTable(
+        priceTiers: Array<{ fromValue: number; toValue: number; price: number }>,
+        quantity: number,
+        tableType: PriceTableType,
+        unit: string
+    ): { amount: number; calculation: string } {
+        if (!priceTiers || priceTiers.length === 0) {
+            return { amount: 0, calculation: 'No price tiers defined' };
+        }
+
+        // Sort tiers by 'fromValue' ascending
+        const sortedTiers = [...priceTiers].sort((a, b) => a.fromValue - b.fromValue);
+
+        if (tableType === PriceTableType.FLAT) {
+            // Flat: Find the matching tier, multiply quantity by that rate
+            const matchingTier = sortedTiers.find(tier => quantity >= tier.fromValue && quantity <= tier.toValue);
+            if (matchingTier) {
+                const amount = quantity * matchingTier.price;
+                return {
+                    amount,
+                    calculation: `${quantity} ${unit} x ${matchingTier.price} (tier ${matchingTier.fromValue}-${matchingTier.toValue}) = ${amount}`
+                };
+            }
+            // If quantity exceeds all tiers, use the last tier's price
+            const lastTier = sortedTiers[sortedTiers.length - 1];
+            const amount = quantity * lastTier.price;
+            return {
+                amount,
+                calculation: `${quantity} ${unit} x ${lastTier.price} (last tier) = ${amount}`
+            };
+        }
+
+        // Progressive: Sum up charges for each tier
+        let remainingQty = quantity;
+        let totalAmount = 0;
+        const calculations: string[] = [];
+
+        for (const tier of sortedTiers) {
+            if (remainingQty <= 0) break;
+            
+            const tierRange = tier.toValue - tier.fromValue + 1;
+            const qtyInTier = Math.min(remainingQty, tierRange);
+            const tierAmount = qtyInTier * tier.price;
+            
+            totalAmount += tierAmount;
+            calculations.push(`${qtyInTier} ${unit} x ${tier.price}`);
+            remainingQty -= qtyInTier;
+        }
+
+        // If there's remaining quantity beyond defined tiers, use last tier's price
+        if (remainingQty > 0 && sortedTiers.length > 0) {
+            const lastTier = sortedTiers[sortedTiers.length - 1];
+            const extraAmount = remainingQty * lastTier.price;
+            totalAmount += extraAmount;
+            calculations.push(`${remainingQty} ${unit} x ${lastTier.price} (overflow)`);
+        }
+
+        return {
+            amount: totalAmount,
+            calculation: `Progressive: ${calculations.join(' + ')} = ${totalAmount}`
+        };
+    }
+
 
     async create(ownerId: string, createInvoiceDto: CreateInvoiceDto): Promise<Invoice> {
-        // Calculate amounts
-        const electricityUsed = (createInvoiceDto.currentElectricIndex || 0) - (createInvoiceDto.previousElectricIndex || 0);
-        const electricityAmount = electricityUsed * (createInvoiceDto.electricityPrice || 0);
+        this.logger.log(`Creating invoice for contract: ${createInvoiceDto.contractId}`);
 
-        const waterUsed = (createInvoiceDto.currentWaterIndex || 0) - (createInvoiceDto.previousWaterIndex || 0);
-        const waterAmount = waterUsed * (createInvoiceDto.waterPrice || 0);
+        // 1. Check for duplicate invoice (same contract, same billing period, same invoice type)
+        const existingInvoice = await this.invoiceModel.findOne({
+            contractId: new Types.ObjectId(createInvoiceDto.contractId),
+            'billingPeriod.month': createInvoiceDto.month,
+            'billingPeriod.year': createInvoiceDto.year,
+            invoiceType: createInvoiceDto.invoiceType || InvoiceType.REGULAR,
+            isDeleted: false
+        }).exec();
+
+        if (existingInvoice) {
+            throw new BadRequestException(
+                `Invoice for ${createInvoiceDto.month}/${createInvoiceDto.year} already exists for this contract`
+            );
+        }
+
+        // 2. Fetch contract for snapshot and validation
+        const contract = await this.contractModel.findOne({
+            _id: new Types.ObjectId(createInvoiceDto.contractId),
+            ownerId: new Types.ObjectId(ownerId),
+            isDeleted: false
+        }).exec();
+
+        if (!contract) {
+            throw new NotFoundException('Contract not found');
+        }
+
+        if (contract.status !== ContractStatus.ACTIVE) {
+            throw new BadRequestException('Can only create invoices for active contracts');
+        }
+
+        // 3. Calculate amounts based on contract type
+        let electricityUsed = 0;
+        let electricityAmount = 0;
+        let waterUsed = 0;
+        let waterAmount = 0;
+        let rentAmount = createInvoiceDto.rentAmount;
+        let shortTermCalculation = '';
+
+        const isShortTerm = contract.roomType === 'SHORT_TERM';
+
+        if (isShortTerm) {
+            // Short-term: Calculate rent from duration and pricing
+            const totalHours = createInvoiceDto.totalHours || 0;
+            const totalDays = createInvoiceDto.totalDays || 0;
+            
+            const result = this.calculateShortTermAmount(contract, totalHours, totalDays);
+            rentAmount = result.amount;
+            shortTermCalculation = result.calculation;
+            
+            this.logger.log(`Short-term calculation: ${shortTermCalculation}`);
+        } else {
+            // Long-term: Calculate utilities from meter readings
+            // Frontend sends initialElectricIndex/initialWaterIndex as the current meter reading
+            // Fallback to currentElectricIndex/currentWaterIndex for backward compatibility
+            const currentElectric = createInvoiceDto.initialElectricIndex ?? createInvoiceDto.currentElectricIndex ?? 0;
+            const currentWater = createInvoiceDto.initialWaterIndex ?? createInvoiceDto.currentWaterIndex ?? 0;
+            const previousElectric = createInvoiceDto.previousElectricIndex ?? 0;
+            const previousWater = createInvoiceDto.previousWaterIndex ?? 0;
+
+            electricityUsed = Math.max(0, currentElectric - previousElectric);
+            electricityAmount = electricityUsed * (createInvoiceDto.electricityPrice || 0);
+
+            waterUsed = Math.max(0, currentWater - previousWater);
+            waterAmount = waterUsed * (createInvoiceDto.waterPrice || 0);
+
+            // Normalize: store current values in both fields for consistency
+            createInvoiceDto.currentElectricIndex = currentElectric;
+            createInvoiceDto.currentWaterIndex = currentWater;
+        }
 
         const serviceTotal = (createInvoiceDto.serviceCharges || []).reduce((sum, charge) => sum + charge.amount, 0);
-        const totalAmount = createInvoiceDto.rentAmount + electricityAmount + waterAmount + serviceTotal;
+        
+        // Calculate adjustments (additional charges - discounts)
+        const adjustmentTotal = (createInvoiceDto.adjustments || []).reduce((sum, adj) => {
+            return adj.isDiscount ? sum - adj.amount : sum + adj.amount;
+        }, 0);
+
+        const totalAmount = rentAmount + electricityAmount + waterAmount + serviceTotal + adjustmentTotal;
 
         const invoiceNumber = `INV-${Date.now()}`;
 
+        // 4. Create contract snapshot if not provided
+        const contractSnapshot = createInvoiceDto.contractSnapshot || {
+            contractCode: contract.contractCode,
+            contractType: contract.contractType,
+            roomType: contract.roomType,
+            rentPrice: contract.rentPrice,
+            electricityPrice: contract.electricityPrice,
+            waterPrice: contract.waterPrice,
+            paymentCycle: contract.paymentCycle,
+            paymentCycleMonths: contract.paymentCycleMonths,
+            serviceCharges: contract.serviceCharges,
+            // Short-term specific
+            shortTermPricingType: contract.shortTermPricingType,
+            shortTermPrices: contract.shortTermPrices,
+            priceTableType: contract.priceTableType,
+            pricePerHour: contract.pricePerHour,
+            fixedPrice: contract.fixedPrice,
+            // Calculation details
+            ...(isShortTerm && { shortTermCalculation }),
+        };
+
+        // 5. Create invoice
         const invoice = new this.invoiceModel({
             ...createInvoiceDto,
-            ownerId,
+            ownerId: new Types.ObjectId(ownerId),
+            contractId: new Types.ObjectId(createInvoiceDto.contractId),
+            roomId: new Types.ObjectId(createInvoiceDto.roomId),
+            tenantId: new Types.ObjectId(createInvoiceDto.tenantId),
             invoiceNumber,
+            invoiceType: createInvoiceDto.invoiceType || InvoiceType.REGULAR,
             billingPeriod: { month: createInvoiceDto.month, year: createInvoiceDto.year },
+            rentAmount,
             electricityUsed,
             electricityAmount,
             waterUsed,
             waterAmount,
             totalAmount,
             remainingAmount: totalAmount,
+            contractSnapshot,
+            // Short-term specific fields
+            ...(isShortTerm && {
+                checkInTime: createInvoiceDto.checkInTime,
+                checkOutTime: createInvoiceDto.checkOutTime,
+                totalHours: createInvoiceDto.totalHours,
+                totalDays: createInvoiceDto.totalDays,
+            }),
         });
 
-        return invoice.save();
+        const savedInvoice = await invoice.save();
+        this.logger.log(`Invoice ${invoiceNumber} created. Total: ${totalAmount}`);
+
+        // 6. Update room's current meter readings (for long-term contracts)
+        if (contract.contractType === ContractType.LONG_TERM) {
+            // Update room's current meter readings with the values from this invoice
+            const newElectricIndex = createInvoiceDto.currentElectricIndex ?? createInvoiceDto.initialElectricIndex;
+            const newWaterIndex = createInvoiceDto.currentWaterIndex ?? createInvoiceDto.initialWaterIndex;
+            if (newElectricIndex !== undefined || newWaterIndex !== undefined) {
+                const updateFields: Record<string, number> = {};
+                if (newElectricIndex !== undefined) updateFields.currentElectricIndex = newElectricIndex;
+                if (newWaterIndex !== undefined) updateFields.currentWaterIndex = newWaterIndex;
+                await this.roomModel.updateOne(
+                    { _id: new Types.ObjectId(createInvoiceDto.roomId) },
+                    { $set: updateFields }
+                ).exec();
+                this.logger.log(`Room meter readings updated: electric=${newElectricIndex}, water=${newWaterIndex}`);
+            }
+
+            // 7. Update contract's nextPaymentDate (for REGULAR invoices only)
+            if (createInvoiceDto.invoiceType !== InvoiceType.FINAL) {
+                const cycleMonths = contract.paymentCycleMonths || 1;
+                const dueDay = contract.paymentDueDay || contract.startDate.getDate();
+                const currentNextPayment = contract.nextPaymentDate || contract.startDate;
+                const newNextPaymentDate = this.calculateNextPaymentDate(currentNextPayment, cycleMonths, dueDay);
+                
+                await this.contractModel.updateOne(
+                    { _id: contract._id },
+                    { $set: { nextPaymentDate: newNextPaymentDate } }
+                ).exec();
+                this.logger.log(`Contract nextPaymentDate updated to: ${newNextPaymentDate.toISOString()}`);
+            }
+        }
+
+        return savedInvoice;
     }
 
     async findAll(ownerId: string): Promise<Invoice[]> {
-        return this.invoiceModel.find({ ownerId, isDeleted: false })
+        return this.invoiceModel.find({ ownerId: new Types.ObjectId(ownerId), isDeleted: false })
             .populate('contractId tenantId')
             .populate({ path: 'roomId', populate: { path: 'buildingId' } })
+            .sort({ createdAt: -1 })
             .exec();
     }
 
     async findOne(id: string, ownerId: string): Promise<Invoice> {
-        const invoice = await this.invoiceModel.findOne({ _id: id, ownerId, isDeleted: false }).populate('contractId roomId tenantId').exec();
+        const invoice = await this.invoiceModel.findOne({ 
+            _id: new Types.ObjectId(id), 
+            ownerId: new Types.ObjectId(ownerId), 
+            isDeleted: false 
+        })
+            .populate('contractId tenantId')
+            .populate({ path: 'roomId', populate: { path: 'buildingId' } })
+            .exec();
         if (!invoice) throw new NotFoundException('Invoice not found');
         return invoice;
+    }
+
+    async findByContract(contractId: string, ownerId: string): Promise<Invoice[]> {
+        return this.invoiceModel.find({ 
+            contractId: new Types.ObjectId(contractId), 
+            ownerId: new Types.ObjectId(ownerId), 
+            isDeleted: false 
+        })
+        .sort({ 'billingPeriod.year': -1, 'billingPeriod.month': -1 })
+        .exec();
     }
 
     async update(id: string, ownerId: string, updateInvoiceDto: UpdateInvoiceDto): Promise<Invoice> {
@@ -58,15 +353,36 @@ export class InvoicesService {
             updateData.remainingAmount = invoice.totalAmount - updateInvoiceDto.paidAmount;
         }
 
+        // Recalculate adjustments if provided
+        if (updateInvoiceDto.adjustments !== undefined) {
+            const invoice = await this.findOne(id, ownerId);
+            const adjustmentTotal = (updateInvoiceDto.adjustments || []).reduce((sum, adj) => {
+                return adj.isDiscount ? sum - adj.amount : sum + adj.amount;
+            }, 0);
+            
+            // Recalculate total (base amount + adjustments)
+            const baseAmount = invoice.rentAmount + invoice.electricityAmount + invoice.waterAmount + 
+                (invoice.serviceCharges || []).reduce((sum, s) => sum + s.amount, 0);
+            updateData.totalAmount = baseAmount + adjustmentTotal;
+            updateData.remainingAmount = updateData.totalAmount - (invoice.paidAmount || 0);
+        }
+
         const invoice = await this.invoiceModel
-            .findOneAndUpdate({ _id: id, ownerId, isDeleted: false }, { $set: updateData }, { new: true })
+            .findOneAndUpdate(
+                { _id: new Types.ObjectId(id), ownerId: new Types.ObjectId(ownerId), isDeleted: false }, 
+                { $set: updateData }, 
+                { new: true }
+            )
             .exec();
         if (!invoice) throw new NotFoundException('Invoice not found');
         return invoice;
     }
 
     async remove(id: string, ownerId: string): Promise<void> {
-        const result = await this.invoiceModel.updateOne({ _id: id, ownerId, isDeleted: false }, { $set: { isDeleted: true } }).exec();
+        const result = await this.invoiceModel.updateOne(
+            { _id: new Types.ObjectId(id), ownerId: new Types.ObjectId(ownerId), isDeleted: false }, 
+            { $set: { isDeleted: true } }
+        ).exec();
         if (result.matchedCount === 0) throw new NotFoundException('Invoice not found');
     }
 }

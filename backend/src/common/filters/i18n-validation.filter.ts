@@ -1,6 +1,6 @@
-import { ArgumentsHost, Catch, ExceptionFilter, BadRequestException } from '@nestjs/common';
+import { ArgumentsHost, BadRequestException, Catch, ExceptionFilter } from '@nestjs/common';
 import { Response } from 'express';
-import { I18nService, I18nContext } from 'nestjs-i18n';
+import { I18nContext, I18nService } from 'nestjs-i18n';
 
 interface ValidationError {
     property: string;
@@ -17,10 +17,6 @@ export class I18nValidationExceptionFilter implements ExceptionFilter {
         const response = ctx.getResponse<Response>();
         const status = exception.getStatus();
         const exceptionResponse = exception.getResponse() as any;
-
-        // Log validation errors to console
-        console.log('=== VALIDATION ERROR ===');
-        console.log('Exception Response:', JSON.stringify(exceptionResponse, null, 2));
 
         // If it's a validation error with message array
         if (Array.isArray(exceptionResponse.message)) {

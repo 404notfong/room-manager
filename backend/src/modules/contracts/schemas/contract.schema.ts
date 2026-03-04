@@ -1,7 +1,7 @@
+import { ContractStatus, ContractType, PaymentCycle, PriceTableType, RoomType, ShortTermPricingType } from '@common/constants/enums';
+import { ShortTermPriceTier, ShortTermPriceTierSchema } from '@modules/rooms/schemas/room.schema';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { ContractType, ContractStatus, PaymentCycle, RoomType, ShortTermPricingType } from '@common/constants/enums';
-import { ShortTermPriceTierSchema, ShortTermPriceTier } from '@modules/rooms/schemas/room.schema';
 
 export type ContractDocument = Contract & Document;
 
@@ -59,6 +59,9 @@ export class Contract {
     @Prop({ type: [ShortTermPriceTierSchema], default: [] })
     shortTermPrices: ShortTermPriceTier[];
 
+    @Prop({ type: String, enum: PriceTableType, default: PriceTableType.PROGRESSIVE })
+    priceTableType: PriceTableType;
+
     @Prop({
         type: [{
             name: String,
@@ -97,6 +100,13 @@ export class Contract {
 
     @Prop({ trim: true })
     notes: string;
+
+    // === Invoice & Termination Tracking ===
+    @Prop()
+    nextPaymentDate: Date;  // Ngày thanh toán tiếp theo (auto-calculated)
+
+    @Prop()
+    terminatedAt: Date;     // Ngày đóng hợp đồng thực tế
 
     @Prop({ default: false })
     isDeleted: boolean;

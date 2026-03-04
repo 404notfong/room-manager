@@ -1,19 +1,13 @@
-import { useState, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Receipt, Search, MoreHorizontal, AlertCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import apiClient from '@/api/client';
+import ContractSelectModal from '@/components/ContractSelectModal';
+import CreateInvoiceModal from '@/components/CreateInvoiceModal';
+import CreateShortTermInvoiceModal from '@/components/CreateShortTermInvoiceModal';
+import InvoiceViewModal from '@/components/InvoiceViewModal';
+import Pagination from '@/components/Pagination';
+import RecordPaymentModal from '@/components/RecordPaymentModal';
 import { Badge } from '@/components/ui/badge';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Dialog,
     DialogContent,
@@ -28,23 +22,36 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { toast } from '@/hooks/use-toast';
-import apiClient from '@/api/client';
-import Pagination from '@/components/Pagination';
-import { useBuildingStore } from '@/stores/buildingStore';
+import { Input } from '@/components/ui/input';
 import { TableSkeleton } from '@/components/ui/skeletons/TableSkeleton';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
+import { toast } from '@/hooks/use-toast';
+import { useBuildingStore } from '@/stores/buildingStore';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertCircle, Eye, MoreHorizontal, Pencil, Plus, Receipt, Search, Trash2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface Invoice {
     _id: string;
     invoiceNumber: string;
-    contract: { _id: string; tenant: { fullName: string }; room: { roomCode: string } };
-    roomId?: { _id: string; buildingId?: { _id: string } };
+    contractId: { _id: string; contractCode?: string };
+    tenantId: { _id: string; fullName: string };
+    roomId: { _id: string; roomCode: string; buildingId?: { _id: string } };
     billingPeriod: { month: number; year: number };
-    roomCharge: number;
-    electricityCharge: number;
-    waterCharge: number;
-    otherCharges: number;
+    rentAmount: number;
+    electricityAmount: number;
+    waterAmount: number;
     totalAmount: number;
+    paidAmount: number;
+    remainingAmount: number;
     dueDate: string;
     status: 'pending' | 'paid' | 'overdue' | 'cancelled';
     createdAt: string;
@@ -67,9 +74,17 @@ export default function InvoicesPage() {
     const { selectedBuildingId } = useBuildingStore();
     const [searchTerm, setSearchTerm] = useState('');
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+    const [isViewOpen, setIsViewOpen] = useState(false);
+    const [isPaymentOpen, setIsPaymentOpen] = useState(false);
     const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
+
+    // Contract selection & invoice creation states
+    const [isSelectContractOpen, setIsSelectContractOpen] = useState(false);
+    const [selectedContract, setSelectedContract] = useState<any>(null);
+    const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
+    const [isCreateShortTermInvoiceOpen, setIsCreateShortTermInvoiceOpen] = useState(false);
 
     const { data: invoices = [], isLoading } = useQuery({
         queryKey: ['invoices'],
@@ -94,6 +109,16 @@ export default function InvoicesPage() {
         setIsDeleteOpen(true);
     };
 
+    const handleContractSelected = (contract: any) => {
+        setSelectedContract(contract);
+        const type = contract.roomType || contract.contractType;
+        if (type === 'SHORT_TERM') {
+            setIsCreateShortTermInvoiceOpen(true);
+        } else {
+            setIsCreateInvoiceOpen(true);
+        }
+    };
+
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'paid':
@@ -109,10 +134,13 @@ export default function InvoicesPage() {
         }
     };
 
-
-
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+    };
+
+    const formatDate = (dateString: string) => {
+        if (!dateString) return '-';
+        return new Date(dateString).toLocaleDateString('vi-VN');
     };
 
     const isOverdue = (dueDate: string, status: string) => {
@@ -121,14 +149,19 @@ export default function InvoicesPage() {
 
     // Filter by selected building first, then by search
     const buildingFilteredInvoices = selectedBuildingId
-        ? invoices.filter(invoice => invoice.roomId?.buildingId?._id === selectedBuildingId)
+        ? invoices.filter(invoice => {
+            const buildingId = typeof invoice.roomId?.buildingId === 'object'
+                ? (invoice.roomId.buildingId as any)?._id
+                : invoice.roomId?.buildingId;
+            return buildingId === selectedBuildingId;
+        })
         : invoices;
 
     const filteredInvoices = buildingFilteredInvoices.filter(
         (invoice) =>
             invoice.invoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            invoice.contract?.tenant?.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            invoice.contract?.room?.roomCode?.toLowerCase().includes(searchTerm.toLowerCase())
+            invoice.tenantId?.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            invoice.roomId?.roomCode?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     // Pagination
@@ -151,7 +184,7 @@ export default function InvoicesPage() {
                     <h1 className="text-3xl font-bold tracking-tight">{t('invoices.title')}</h1>
                     <p className="text-muted-foreground">{t('invoices.subtitle')}</p>
                 </div>
-                <Button>
+                <Button onClick={() => setIsSelectContractOpen(true)}>
                     <Plus className="mr-2 h-4 w-4" />
                     {t('invoices.generate')}
                 </Button>
@@ -183,7 +216,7 @@ export default function InvoicesPage() {
                 </CardHeader>
                 <CardContent>
                     {isLoading ? (
-                        <TableSkeleton columns={7} />
+                        <TableSkeleton columns={9} />
                     ) : filteredInvoices.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">{t('invoices.noData')}</div>
                     ) : (
@@ -195,6 +228,8 @@ export default function InvoicesPage() {
                                     <TableHead>{t('invoices.room')}</TableHead>
                                     <TableHead>{t('invoices.period')}</TableHead>
                                     <TableHead className="text-right">{t('invoices.totalAmount')}</TableHead>
+                                    <TableHead className="text-right">{t('invoices.paidAmount')}</TableHead>
+                                    <TableHead className="text-right">{t('invoices.remainingAmount')}</TableHead>
                                     <TableHead>{t('invoices.dueDate')}</TableHead>
                                     <TableHead className="text-center">{t('common.status')}</TableHead>
                                     <TableHead className="w-[70px]"></TableHead>
@@ -202,15 +237,28 @@ export default function InvoicesPage() {
                             </TableHeader>
                             <TableBody>
                                 {paginatedInvoices.map((invoice) => (
-                                    <TableRow key={invoice._id}>
+                                    <TableRow 
+                                        key={invoice._id}
+                                        className="cursor-pointer hover:bg-slate-50"
+                                        onClick={() => {
+                                            setSelectedInvoice(invoice);
+                                            setIsViewOpen(true);
+                                        }}
+                                    >
                                         <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
-                                        <TableCell>{invoice.contract?.tenant?.fullName || '-'}</TableCell>
-                                        <TableCell>{invoice.contract?.room?.roomCode || '-'}</TableCell>
+                                        <TableCell>{invoice.tenantId?.fullName || '-'}</TableCell>
+                                        <TableCell>{invoice.roomId?.roomCode || '-'}</TableCell>
                                         <TableCell>
                                             {invoice.billingPeriod?.month}/{invoice.billingPeriod?.year}
                                         </TableCell>
                                         <TableCell className="text-right font-medium">
                                             {formatCurrency(invoice.totalAmount)}
+                                        </TableCell>
+                                        <TableCell className="text-right text-green-600">
+                                            {formatCurrency(invoice.paidAmount || 0)}
+                                        </TableCell>
+                                        <TableCell className="text-right text-orange-600 font-medium">
+                                            {formatCurrency(invoice.remainingAmount || 0)}
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-1">
@@ -231,11 +279,22 @@ export default function InvoicesPage() {
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedInvoice(invoice);
+                                                        setIsViewOpen(true);
+                                                    }}>
+                                                        <Eye className="mr-2 h-4 w-4" />
+                                                        {t('common.view')}
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
                                                         <Pencil className="mr-2 h-4 w-4" />
                                                         {t('common.edit')}
                                                     </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => handleDelete(invoice)} className="text-destructive">
+                                                    <DropdownMenuItem onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleDelete(invoice);
+                                                    }} className="text-destructive">
                                                         <Trash2 className="mr-2 h-4 w-4" />
                                                         {t('common.delete')}
                                                     </DropdownMenuItem>
@@ -269,7 +328,6 @@ export default function InvoicesPage() {
                     onPointerDownOutside={(e) => e.preventDefault()}
                     onEscapeKeyDown={(e) => e.preventDefault()}
                 >
-
                     <DialogHeader>
                         <DialogTitle>{t('invoices.deleteTitle')}</DialogTitle>
                         <DialogDescription>
@@ -290,6 +348,61 @@ export default function InvoicesPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* View Invoice Modal */}
+            <InvoiceViewModal
+                open={isViewOpen}
+                onOpenChange={setIsViewOpen}
+                invoice={selectedInvoice}
+                onRecordPayment={() => {
+                    setIsViewOpen(false);
+                    setIsPaymentOpen(true);
+                }}
+            />
+
+            {/* Record Payment Modal */}
+            <RecordPaymentModal
+                open={isPaymentOpen}
+                onOpenChange={setIsPaymentOpen}
+                invoice={selectedInvoice}
+                onSuccess={() => {
+                    setIsPaymentOpen(false);
+                    setSelectedInvoice(null);
+                }}
+            />
+
+            {/* Contract Selection Modal */}
+            <ContractSelectModal
+                open={isSelectContractOpen}
+                onOpenChange={setIsSelectContractOpen}
+                onSelect={handleContractSelected}
+            />
+
+            {/* Create Invoice Modal (Long-term) */}
+            <CreateInvoiceModal
+                open={isCreateInvoiceOpen}
+                onOpenChange={setIsCreateInvoiceOpen}
+                contract={selectedContract}
+                room={selectedContract?.roomId}
+                onSuccess={() => {
+                    setIsCreateInvoiceOpen(false);
+                    setSelectedContract(null);
+                    queryClient.invalidateQueries({ queryKey: ['invoices'] });
+                }}
+            />
+
+            {/* Create Short-Term Invoice Modal */}
+            <CreateShortTermInvoiceModal
+                open={isCreateShortTermInvoiceOpen}
+                onOpenChange={setIsCreateShortTermInvoiceOpen}
+                contract={selectedContract}
+                room={selectedContract?.roomId}
+                onSuccess={() => {
+                    setIsCreateShortTermInvoiceOpen(false);
+                    setSelectedContract(null);
+                    queryClient.invalidateQueries({ queryKey: ['invoices'] });
+                }}
+            />
         </div>
     );
 }

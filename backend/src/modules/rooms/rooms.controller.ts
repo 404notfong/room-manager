@@ -1,8 +1,8 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
-import { RoomsService } from '@modules/rooms/rooms.service';
-import { CreateRoomDto, UpdateRoomDto, UpdateIndexesDto, GetRoomsDto, DashboardRoomsDto } from '@modules/rooms/dto/room.dto';
-import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '@common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
+import { CreateRoomDto, DashboardRoomsDto, GetRoomsDto, ReorderRoomsDto, UpdateIndexesDto, UpdateRoomDto } from '@modules/rooms/dto/room.dto';
+import { RoomsService } from '@modules/rooms/rooms.service';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
 
 @Controller('rooms')
 @UseGuards(JwtAuthGuard)
@@ -37,6 +37,11 @@ export class RoomsController {
     @Put(':id/indexes')
     updateIndexes(@Param('id') id: string, @CurrentUser() user: any, @Body() updateIndexesDto: UpdateIndexesDto) {
         return this.roomsService.updateIndexes(id, user.userId, updateIndexesDto);
+    }
+
+    @Patch('reorder')
+    reorderRooms(@CurrentUser() user: any, @Body() reorderDto: ReorderRoomsDto) {
+        return this.roomsService.reorderRooms(user.userId, reorderDto.items);
     }
 
     @Delete(':id')

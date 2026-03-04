@@ -1,9 +1,12 @@
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
+import { useDroppable } from '@dnd-kit/core';
+import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import { ChevronDown } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { DraggableRoomCard } from './DraggableRoomCard';
 import RoomCard from './RoomCard';
 
 interface Room {
@@ -44,6 +47,7 @@ interface Room {
 }
 
 interface RoomGroupCollapseProps {
+    groupId?: string;
     groupName: string;
     groupColor?: string;
     rooms: Room[];
@@ -55,9 +59,11 @@ interface RoomGroupCollapseProps {
     defaultOpen?: boolean;
     onEditContract?: (contractId: string) => void;
     onActivateContract?: (contract: { _id: string; startDate: string; endDate?: string }) => void;
+    isDragEnabled?: boolean;
 }
 
 export default function RoomGroupCollapse({
+    groupId,
     groupName,
     groupColor,
     rooms,
@@ -69,6 +75,7 @@ export default function RoomGroupCollapse({
     defaultOpen = true,
     onEditContract,
     onActivateContract,
+    isDragEnabled = false,
 }: RoomGroupCollapseProps) {
     const { t } = useTranslation();
     const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -80,7 +87,9 @@ export default function RoomGroupCollapse({
     useEffect(() => {
         const calculateItemsPerPage = () => {
             const width = window.innerWidth;
-            if (width >= 1600) {
+            if (width >= 1920) {
+                return 10; // 5 cols * 2 rows
+            } else if (width >= 1600) {
                 return 8; // 4 cols * 2 rows
             } else if (width >= 1300) {
                 return 6; // 3 cols * 2 rows
@@ -139,6 +148,15 @@ export default function RoomGroupCollapse({
         DEPOSITED: rooms.filter(r => r.status === 'DEPOSITED').length,
     };
 
+    // Droppable for receiving cards from other groups
+    const { setNodeRef: setDroppableRef, isOver } = useDroppable({
+        id: groupId || 'ungrouped',
+        data: { type: 'group', groupId: groupId || null },
+    });
+
+    // Room IDs for sortable context
+    const roomIds = rooms.map(r => r._id);
+
     return (
         <Collapsible open={isOpen} onOpenChange={setIsOpen}>
             <CollapsibleTrigger asChild>
@@ -186,7 +204,13 @@ export default function RoomGroupCollapse({
                     </div>
                 </div>
             </CollapsibleTrigger>
-            <CollapsibleContent className="relative group/carousel overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
+            <CollapsibleContent 
+                ref={setDroppableRef}
+                className={cn(
+                    "relative group/carousel overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up",
+                    isOver && isDragEnabled && "ring-2 ring-primary ring-inset bg-primary/5"
+                )}
+            >
                 {/* Navigation Buttons - Show only on hover if preferred, or always */}
                 {showNav && (
                     <>
@@ -221,20 +245,25 @@ export default function RoomGroupCollapse({
                         style={{ transform: `translateX(-${currPage * 100}%)` }}
                     >
                         {pages.map((pageRooms, pageIdx) => (
-                            <div key={pageIdx} className="w-full flex-shrink-0 grid grid-cols-1 sm:grid-cols-2 min-[1300px]:grid-cols-3 min-[1600px]:grid-cols-4 gap-4 p-4 pl-8 content-start">
-                                {pageRooms.map((room) => (
-                                    <RoomCard
-                                        key={room._id}
-                                        room={room}
-                                        onCreateContract={onCreateContract}
-                                        onViewContract={onViewContract}
-                                        onEdit={onEdit}
-                                        onToggleStatus={onToggleStatus}
-                                        isTogglingStatus={isTogglingStatus}
-                                        onEditContract={onEditContract}
-                                        onActivateContract={onActivateContract}
-                                    />
-                                ))}
+                            <div key={pageIdx} className="w-full flex-shrink-0 p-4 pl-8">
+                                <SortableContext items={roomIds} strategy={rectSortingStrategy} disabled={!isDragEnabled}>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 min-[1300px]:grid-cols-3 min-[1600px]:grid-cols-4 min-[1920px]:grid-cols-5 gap-4 content-start">
+                                        {pageRooms.map((room) => (
+                                            <DraggableRoomCard key={room._id} id={room._id} disabled={!isDragEnabled}>
+                                                <RoomCard
+                                                    room={room}
+                                                    onCreateContract={onCreateContract}
+                                                    onViewContract={onViewContract}
+                                                    onEdit={onEdit}
+                                                    onToggleStatus={onToggleStatus}
+                                                    isTogglingStatus={isTogglingStatus}
+                                                    onEditContract={onEditContract}
+                                                    onActivateContract={onActivateContract}
+                                                />
+                                            </DraggableRoomCard>
+                                        ))}
+                                    </div>
+                                </SortableContext>
                             </div>
                         ))}
                     </div>

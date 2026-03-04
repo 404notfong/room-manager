@@ -63,7 +63,10 @@ interface Room {
     hourlyPricingMode?: 'PER_HOUR' | 'TABLE';
     pricePerHour?: number;
     shortTermPrices?: ShortTermPriceTier[];
+    priceTableType?: 'PROGRESSIVE' | 'FLAT';
     fixedPrice?: number;
+    currentElectricIndex?: number;
+    currentWaterIndex?: number;
     createdAt: string;
 }
 
@@ -255,9 +258,9 @@ export default function RoomsPage() {
 
     const getRoomTypeBadge = (roomType: string) => {
         if (roomType === 'LONG_TERM') {
-            return <Badge variant="outline" className="border-green-500 text-green-600">{t('rooms.roomTypeLongTerm')}</Badge>;
+            return <Badge variant="outline" className="bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 border-0">{t('rooms.roomTypeLongTerm')}</Badge>;
         }
-        return <Badge variant="outline" className="border-orange-500 text-orange-600">{t('rooms.roomTypeShortTerm')}</Badge>;
+        return <Badge variant="outline" className="bg-orange-100 text-orange-700 hover:bg-orange-100 dark:bg-orange-900/30 dark:text-orange-400 border-0">{t('rooms.roomTypeShortTerm')}</Badge>;
     };
 
     const formatCurrency = (amount: number | undefined) => {
@@ -330,11 +333,14 @@ export default function RoomsPage() {
             pricePerHour: room.pricePerHour,
             shortTermPrices: (!room.shortTermPrices || room.shortTermPrices.length === 0)
                 ? [
-                    { fromValue: 0, toValue: 0, price: 0 },
-                    { fromValue: 0, toValue: -1, price: 0 }
+                    { fromValue: 1, toValue: 1, price: 0 },
+                    { fromValue: 2, toValue: -1, price: 0 }
                 ]
                 : room.shortTermPrices,
+            priceTableType: room.priceTableType || 'PROGRESSIVE',
             fixedPrice: room.fixedPrice,
+            currentElectricIndex: room.currentElectricIndex || 0,
+            currentWaterIndex: room.currentWaterIndex || 0,
         };
     };
 

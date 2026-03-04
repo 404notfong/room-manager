@@ -1,6 +1,6 @@
+import { PriceTableType, RoomStatus, RoomType, ShortTermPricingType } from '@common/constants/enums';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { RoomStatus, RoomType, ShortTermPricingType } from '@common/constants/enums';
 
 export type RoomDocument = Room & Document;
 
@@ -78,6 +78,9 @@ export class Room {
     @Prop({ type: [ShortTermPriceTierSchema], default: [] })
     shortTermPrices: ShortTermPriceTier[];  // Bảng giá theo giờ/ngày
 
+    @Prop({ type: String, enum: PriceTableType, default: PriceTableType.PROGRESSIVE })
+    priceTableType: PriceTableType;  // Loại bảng giá: Lũy tiến hoặc Trọn gói
+
     @Prop({ default: 0 })
     fixedPrice: number;            // Giá cố định (nếu chọn FIXED)
 
@@ -99,6 +102,9 @@ export class Room {
 
     @Prop({ type: [String], default: [] })
     images: string[];
+
+    @Prop({ default: 0 })
+    sortOrder: number;  // Thứ tự hiển thị trong dashboard (cho drag-and-drop)
 
     @Prop({ default: false })
     isDeleted: boolean;

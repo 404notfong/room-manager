@@ -1,8 +1,8 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Query } from '@nestjs/common';
-import { ContractsService } from '@modules/contracts/contracts.service';
-import { CreateContractDto, UpdateContractDto, GetContractsDto, ActivateContractDto } from '@modules/contracts/dto/contract.dto';
-import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '@common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
+import { ContractsService } from '@modules/contracts/contracts.service';
+import { ActivateContractDto, CreateContractDto, GetContractsDto, TerminateContractDto, UpdateContractDto } from '@modules/contracts/dto/contract.dto';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
 
 @Controller('contracts')
 @UseGuards(JwtAuthGuard)
@@ -32,6 +32,16 @@ export class ContractsController {
     @Put(':id/activate')
     activate(@Param('id') id: string, @Body() activateContractDto: ActivateContractDto, @CurrentUser() user: any) {
         return this.contractsService.activate(id, user.userId, activateContractDto);
+    }
+
+    @Patch(':id/terminate')
+    terminate(
+        @Param('id') id: string, 
+        @Body() terminateDto: TerminateContractDto,
+        @Query('closeTenant') closeTenant: string,
+        @CurrentUser() user: any
+    ) {
+        return this.contractsService.terminate(id, user.userId, terminateDto, closeTenant === 'true');
     }
 
     @Delete(':id')

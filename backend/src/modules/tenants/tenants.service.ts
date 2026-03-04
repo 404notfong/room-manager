@@ -1,10 +1,10 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
+import { TenantStatus } from '@common/constants/enums';
+import { escapeRegExp, normalizeString } from '@common/utils/string.util';
+import { CreateTenantDto, GetTenantsDto, UpdateTenantDto } from '@modules/tenants/dto/tenant.dto';
+import { Tenant, TenantDocument } from '@modules/tenants/schemas/tenant.schema';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Tenant, TenantDocument } from '@modules/tenants/schemas/tenant.schema';
-import { CreateTenantDto, UpdateTenantDto, GetTenantsDto } from '@modules/tenants/dto/tenant.dto';
-import { normalizeString, escapeRegExp } from '@common/utils/string.util';
-import { TenantStatus } from '@common/constants/enums';
 
 @Injectable()
 export class TenantsService {
@@ -167,6 +167,17 @@ export class TenantsService {
         if (updateData.fullName) {
             updateData.fullNameNormalized = normalizeString(updateData.fullName);
         }
+        
+        // Convert currentRoomId to ObjectId if it's a string
+        if (updateData.currentRoomId !== undefined) {
+            if (updateData.currentRoomId === null) {
+                updateData.currentRoomId = null;
+            } else if (typeof updateData.currentRoomId === 'string') {
+                updateData.currentRoomId = new Types.ObjectId(updateData.currentRoomId);
+            }
+            // If already ObjectId, it stays as is
+        }
+        
         const tenant = await this.tenantModel
             .findOneAndUpdate({ _id: id, ownerId: new Types.ObjectId(ownerId), isDeleted: false }, { $set: updateData }, { new: true })
             .exec();

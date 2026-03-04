@@ -51,6 +51,12 @@ export enum InvoiceStatus {
     PARTIAL = 'PARTIAL',
     PAID = 'PAID',
     OVERDUE = 'OVERDUE',
+    CANCELLED = 'CANCELLED',
+}
+
+export enum InvoiceType {
+    REGULAR = 'REGULAR',    // Hóa đơn định kỳ
+    FINAL = 'FINAL',        // Hóa đơn cuối (đóng hợp đồng)
 }
 
 export enum PaymentMethod {
@@ -70,4 +76,10 @@ export enum ShortTermPricingType {
     HOURLY = 'HOURLY',   // Theo giờ
     DAILY = 'DAILY',     // Theo ngày
     FIXED = 'FIXED',     // Theo giá cố định
+}
+
+// Cách tính giá khi dùng bảng giá (TABLE mode)
+export enum PriceTableType {
+    PROGRESSIVE = 'PROGRESSIVE',   // Lũy tiến: cộng dồn từng mức giá
+    FLAT = 'FLAT',                 // Trọn gói: nhân giá theo số lượng
 }

@@ -1,20 +1,7 @@
-import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, FileText, Calendar, Pencil, Trash2, Search, Zap, Droplets } from 'lucide-react';
 import { PriceTablePopover } from '@/components/PriceTablePopover';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Dialog,
     DialogContent,
@@ -23,15 +10,28 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Calendar, Droplets, Eye, FileText, Pencil, Plus, Search, Trash2, Zap } from 'lucide-react';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
-import { toast } from '@/hooks/use-toast';
 import apiClient from '@/api/client';
-import Pagination from '@/components/Pagination';
-import { useBuildingStore } from '@/stores/buildingStore';
-import { useDebounce } from '@/hooks/useDebounce';
-import { useColumnVisibility, ColumnConfig } from '@/hooks/useColumnVisibility';
 import { ColumnVisibilityToggle } from '@/components/ColumnVisibilityToggle';
-import { formatPhoneNumber, formatDate } from '@/lib/utils';
+import Pagination from '@/components/Pagination';
+import { toast } from '@/hooks/use-toast';
+import { ColumnConfig, useColumnVisibility } from '@/hooks/useColumnVisibility';
+import { useDebounce } from '@/hooks/useDebounce';
+import { formatDate, formatPhoneNumber } from '@/lib/utils';
+import { useBuildingStore } from '@/stores/buildingStore';
 
 interface Contract {
     _id: string;
@@ -84,9 +84,9 @@ const contractsApi = {
     },
 };
 
-import ContractForm from './ContractForm';
 import { ActivateContractDialog } from '@/components/ActivateContractDialog';
 import ContractViewModal from '@/components/ContractViewModal';
+import ContractForm from './ContractForm';
 
 export default function ContractsPage() {
     const { t } = useTranslation();
@@ -175,7 +175,7 @@ export default function ContractsPage() {
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'ACTIVE':
-                return <Badge className="bg-emerald-500 text-white border-0">{t('contracts.statusActive')}</Badge>;
+                return <Badge className="bg-blue-500 text-white border-0">{t('contracts.statusActive')}</Badge>;
             case 'EXPIRED':
                 return <Badge className="bg-gray-500 text-white border-0">{t('contracts.statusExpired')}</Badge>;
             case 'TERMINATED':
@@ -197,9 +197,9 @@ export default function ContractsPage() {
     const getContractTypeBadge = (roomType: string | undefined, contractType: string | undefined) => {
         // roomType is the definitive Long/Short term indicator
         if (roomType === 'LONG_TERM' || contractType === 'LONG_TERM') {
-            return <Badge variant="outline" className="border-green-500 text-green-600 font-medium">{t('contracts.roomTypeLongTerm')}</Badge>;
+            return <Badge variant="outline" className="bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 border-0">{t('contracts.roomTypeLongTerm')}</Badge>;
         }
-        return <Badge variant="outline" className="border-orange-500 text-orange-600 font-medium">{t('contracts.roomTypeShortTerm')}</Badge>;
+        return <Badge variant="outline" className="bg-orange-100 text-orange-700 hover:bg-orange-100 dark:bg-orange-900/30 dark:text-orange-400 border-0">{t('contracts.roomTypeShortTerm')}</Badge>;
     };
 
     const getRentPriceDisplay = (contract: Contract) => {
@@ -424,6 +424,9 @@ export default function ContractsPage() {
                                         )}
                                         <TableCell>
                                             <div className="flex items-center gap-1">
+                                                <Button variant="ghost" size="icon" onClick={() => handleViewContract(contract)} title={t('common.view')}>
+                                                    <Eye className="h-4 w-4" />
+                                                </Button>
                                                 <Button variant="ghost" size="icon" onClick={() => {
                                                     setSelectedContract(contract);
                                                     setIsCreateOpen(true);
@@ -503,6 +506,9 @@ export default function ContractsPage() {
                         startDate: selectedContract.startDate,
                         endDate: selectedContract.endDate,
                     }}
+                    contractType={(selectedContract.contractType || selectedContract.roomType || 'LONG_TERM') as 'SHORT_TERM' | 'LONG_TERM'}
+                    paymentCycleMonths={selectedContract.paymentCycleMonths}
+                    paymentDueDay={selectedContract.paymentDueDay}
                     onConfirm={(data) => activateMutation.mutate({ id: selectedContract._id, data })}
                     isSubmitting={activateMutation.isPending}
                 />

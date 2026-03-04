@@ -1,69 +1,129 @@
 {
-    "updated_at": "2026-02-01T19:05:00+07:00",
+    "updated_at": "2026-02-10T17:18:00+07:00",
     "working_on": {
-        "feature": "Room Status & Contract Polish",
-        "task": "Enhance Long Term card logic, validate status",
-        "status": "running",
-        "last_run": "2026-02-01T19:05:00+07:00",
-        "last_run_url": "http://localhost:5173",
+        "feature": "Active Contract Update Restrictions & Invoice Fix",
+        "task": "All changes complete and verified",
+        "status": "completed",
         "files": [
-            "frontend/src/components/dashboard/RoomCard.tsx",
-            "backend/src/modules/rooms/rooms.service.ts",
+            "backend/src/modules/contracts/contracts.module.ts",
+            "backend/src/modules/contracts/contracts.service.ts",
+            "backend/src/modules/invoices/dto/invoice.dto.ts",
+            "frontend/src/pages/contracts/ContractForm.tsx",
+            "frontend/src/pages/contracts/ContractsPage.tsx",
             "frontend/public/locales/vi/translation.json",
-            "frontend/src/pages/contracts/ContractForm.tsx"
+            "frontend/public/locales/en/translation.json"
         ],
-        "notes": "Implemented robust date logic (date-fns), relocated Deposit info for Long Term, and added backend security for status changes."
+        "notes": "ACTIVE contracts can now be updated with restrictions. Invoice DTO fixed to whitelist all frontend fields."
     },
-    "pending_tasks": [],
+    "pending_tasks": [
+        {
+            "task": "Data migration for existing tenants with string currentRoomId",
+            "priority": "medium",
+            "notes": "Convert string to ObjectId in existing documents"
+        },
+        {
+            "task": "End-to-end testing of invoice creation flow",
+            "priority": "high",
+            "notes": "Test after DTO fix to ensure all fields pass validation"
+        }
+    ],
     "recent_changes": [
         {
-            "timestamp": "2026-01-30T01:45:00+07:00",
-            "type": "security",
-            "description": "Backend Security: Prevent manual status change for Occupied/Deposited rooms",
+            "timestamp": "2026-02-10T17:08:00+07:00",
+            "type": "fix",
+            "description": "Fixed CreateInvoiceDto: added initialElectricIndex/initialWaterIndex to DTO, added quantity/isRecurring/_id to ServiceChargeDto",
             "files": [
-                "backend/src/modules/rooms/rooms.service.ts"
+                "backend/src/modules/invoices/dto/invoice.dto.ts"
             ]
         },
         {
-            "timestamp": "2026-01-30T01:30:00+07:00",
-            "type": "refactor",
-            "description": "RoomCard: Moved Deposit info to header (Long Term) & Refined Date Logic (date-fns)",
+            "timestamp": "2026-02-10T17:00:00+07:00",
+            "type": "fix",
+            "description": "Changed ACTIVE contract badge color from emerald to blue-500 to match dashboard OCCUPIED room card color",
             "files": [
-                "frontend/src/components/dashboard/RoomCard.tsx"
+                "frontend/src/pages/contracts/ContractsPage.tsx"
             ]
         },
         {
-            "timestamp": "2026-01-30T01:15:00+07:00",
+            "timestamp": "2026-02-10T16:40:00+07:00",
             "type": "feat",
-            "description": "RoomCard: Added advanced date display (Next Payment, Overdue, Remaining Days)",
+            "description": "Active contract update restrictions: backend strips immutable fields (building, room, contractType, startDate), checks invoice count for meter indexes; frontend disables fields with amber hints",
             "files": [
-                "frontend/src/components/dashboard/RoomCard.tsx"
+                "backend/src/modules/contracts/contracts.module.ts",
+                "backend/src/modules/contracts/contracts.service.ts",
+                "frontend/src/pages/contracts/ContractForm.tsx",
+                "frontend/public/locales/vi/translation.json",
+                "frontend/public/locales/en/translation.json"
             ]
         },
         {
-            "timestamp": "2026-01-30T00:30:00+07:00",
-            "type": "i18n",
-            "description": "Renamed 'Payment Due Day' label and added missing keys",
+            "timestamp": "2026-02-09T18:00:00+07:00",
+            "type": "feat",
+            "description": "Calendar redesign: Added 4 new event types (DEPOSIT_CHECKIN_DUE/OVERDUE, ACTIVE_CHECKOUT_DUE/OVERDUE) with distinct colors",
             "files": [
-                "frontend/public/locales/vi/translation.json"
+                "backend/src/modules/calendar/dto/calendar-event.dto.ts",
+                "backend/src/modules/calendar/calendar.service.ts",
+                "frontend/src/components/dashboard/BigCalendar.tsx",
+                "frontend/src/api/calendar.ts"
+            ]
+        },
+        {
+            "timestamp": "2026-02-09T17:45:00+07:00",
+            "type": "fix",
+            "description": "Fixed tenant currentRoomId being stored as string instead of ObjectId",
+            "files": [
+                "backend/src/modules/contracts/contracts.service.ts",
+                "backend/src/modules/tenants/tenants.service.ts",
+                "backend/src/modules/tenants/dto/tenant.dto.ts"
             ]
         }
     ],
     "errors_encountered": [
         {
-            "error": "Fragile Date calculation using timestamps",
-            "solution": "Switched to `differenceInCalendarDays` from `date-fns` for robust day comparison",
+            "error": "CreateInvoiceDto whitelist rejection: initialElectricIndex, initialWaterIndex, serviceCharges.quantity/isRecurring/_id not in DTO",
+            "solution": "Added missing fields to ServiceChargeDto (quantity, isRecurring, _id) and CreateInvoiceDto (initialElectricIndex, initialWaterIndex)",
+            "resolved": true
+        },
+        {
+            "error": "Tenant currentRoomId stored as string instead of ObjectId",
+            "solution": "Updated contracts.service.ts to pass ObjectId, added conversion logic in tenants.service.ts update method",
+            "resolved": true
+        },
+        {
+            "error": "Dashboard contract creation not auto-filling meter indexes",
+            "solution": "Added currentElectricIndex/currentWaterIndex setValue calls in ContractForm useEffect for preSelectedRoom",
+            "resolved": true
+        },
+        {
+            "error": "Calendar not showing granular contract status",
+            "solution": "Added new CalendarEventType enum values and rewrote getContractEvents logic to differentiate DRAFT (deposit) vs ACTIVE (rental) contracts",
             "resolved": true
         }
     ],
     "decisions_made": [
         {
-            "decision": "Backend Strict Status Validation",
-            "reason": "UI restrictions are not enough; backend must prevent illegal status transitions for data integrity."
+            "decision": "ACTIVE contracts allow editing with field restrictions",
+            "reason": "Building, room, contractType, startDate are immutable. Meter indexes only editable if no invoices exist. Backend enforces + frontend shows visual hints."
         },
         {
-            "decision": "Hybrid RoomCard Layout",
-            "reason": "Long Term cards need muted Deposit info (in header), while Short Term cards keep it prominent (at bottom)."
+            "decision": "ACTIVE badge color = blue-500 (matching dashboard)",
+            "reason": "Consistency between contract list ACTIVE badge and dashboard OCCUPIED room card border color"
+        },
+        {
+            "decision": "Separate modals for Long-term and Short-term invoice creation",
+            "reason": "Long-term uses utility readings, Short-term uses duration-based pricing - different UX flows"
+        },
+        {
+            "decision": "Auto-sync payment with invoice status",
+            "reason": "PaymentsService.create() updates invoice paidAmount/remainingAmount/status automatically"
+        },
+        {
+            "decision": "Granular calendar event types based on contract status",
+            "reason": "DRAFT contracts show check-in events, ACTIVE contracts show checkout events. Overdue detection compares with today's date."
+        },
+        {
+            "decision": "Use initialElectricIndex/initialWaterIndex for both Room and Contract",
+            "reason": "Semantic consistency - these are the initial values at contract start, not current values"
         }
     ]
 }

@@ -12,9 +12,15 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn, formatCurrency } from '@/lib/utils';
 import { differenceInCalendarDays, format } from 'date-fns';
-import { Calendar, Droplets, Edit, FileText, Loader2, MoreHorizontal, Package, Plus, User, Wallet, Wrench, Zap } from 'lucide-react';
+import { Calendar, ChevronDown, Droplets, Edit, FileText, Loader2, MoreHorizontal, Package, Plus, User, Wallet, Wrench, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { PriceTablePopover } from '@/components/PriceTablePopover';
@@ -38,19 +44,24 @@ interface RoomCardProps {
         pricePerHour?: number;
         fixedPrice?: number;
         shortTermPrices?: { fromValue: number; toValue: number; price: number }[];
+        priceTableType?: 'PROGRESSIVE' | 'FLAT';
         roomGroupId?: { _id: string; name: string; color?: string };
+        description?: string;
         activeContract?: {
             _id: string;
             tenantId?: { _id: string; fullName: string; phone?: string };
+            notes?: string;
             endDate?: string;
             startDate?: string;
             contractCode?: string;
             contractType?: 'LONG_TERM' | 'SHORT_TERM';
             rentPrice?: number;
-            shortTermPricingType?: string; // FIXED, TIME_BLOCK, HOURLY
+            shortTermPricingType?: string; // FIXED, TIME_BLOCK, HOURLY, DAILY
             hourlyPricingMode?: string;
             pricePerHour?: number;
             fixedPrice?: number;
+            shortTermPrices?: { fromValue: number; toValue: number; price: number }[];
+            priceTableType?: 'PROGRESSIVE' | 'FLAT';
             electricityPrice?: number;
             waterPrice?: number;
             depositAmount?: number;
@@ -66,7 +77,13 @@ interface RoomCardProps {
     onToggleStatus?: (roomId: string, newStatus: 'AVAILABLE' | 'MAINTENANCE') => void;
     isTogglingStatus?: boolean;
     onEditContract?: (contractId: string) => void;
-    onActivateContract?: (contract: { _id: string; startDate: string; endDate?: string }) => void;
+    onActivateContract?: (contract: { 
+        _id: string; 
+        startDate: string; 
+        endDate?: string; 
+        paymentCycleMonths?: number;
+        paymentDueDay?: number;
+    }) => void;
 }
 
 const statusColors = {
@@ -138,19 +155,19 @@ export default function RoomCard({
             }
             // Table Mode (Visual unification)
             if (room.hourlyPricingMode === 'TABLE' && room.shortTermPrices) {
-                return (
-                    <div className="flex flex-col items-center gap-1">
-                        <PriceTablePopover shortTermPrices={room.shortTermPrices} pricingType="HOURLY" highlightPrice={true} />
-                        <span className="text-xs font-medium text-muted-foreground">{t('rooms.priceTable')}</span>
-                    </div>
-                );
+                    return (
+                        <div className="flex flex-col items-center gap-1">
+                            <PriceTablePopover shortTermPrices={room.shortTermPrices} pricingType="HOURLY" priceTableType={room.priceTableType} highlightPrice={true} />
+                            <span className="text-xs font-medium text-muted-foreground">{t('rooms.priceTable')}</span>
+                        </div>
+                    );
             }
         }
 
         if (room.shortTermPricingType === 'DAILY' && room.shortTermPrices) {
             return (
                 <div className="flex flex-col items-center gap-1">
-                    <PriceTablePopover shortTermPrices={room.shortTermPrices} pricingType="DAILY" highlightPrice={true} />
+                    <PriceTablePopover shortTermPrices={room.shortTermPrices} pricingType="DAILY" priceTableType={room.priceTableType} highlightPrice={true} />
                     <span className="text-xs font-medium text-muted-foreground">{t('rooms.priceTable')}</span>
                 </div>
             );
@@ -212,10 +229,13 @@ export default function RoomCard({
                         <div className="flex justify-between items-center mb-0.5">
                             <p className="font-bold text-xs truncate">{contract.tenantId?.fullName || t('tenants.guest')}</p>
                             {/* Deposit Info (Compact) */}
-                            {contract.depositAmount && contract.depositAmount > 0 && (
+                            {(contract.depositAmount !== undefined) && (
                                 <span className="text-[9px] text-muted-foreground flex items-center gap-0.5 shrink-0 bg-muted/50 px-1 py-0 rounded border border-border/50">
                                     <Wallet className="h-2 w-2 opacity-70" />
-                                    {formatCurrency(contract.depositAmount)}
+                                    {contract.depositAmount > 0 
+                                        ? formatCurrency(contract.depositAmount)
+                                        : <span className="text-[8px] uppercase font-semibold">{t('contracts.noDeposit')}</span>
+                                    }
                                 </span>
                             )}
                         </div>
@@ -234,8 +254,15 @@ export default function RoomCard({
                             {showPrice ? (
                                 <span className="font-bold text-primary text-sm">
                                     {formatCurrency(price)}
-                                    <span className="text-[10px] opacity-60 ml-0.5 font-normal">/{unit}</span>
+                                    <span className="text-[10px] text-muted-foreground ml-0.5 font-normal">/{unit}</span>
                                 </span>
+                            ) : contract.shortTermPrices && contract.shortTermPrices.length > 0 ? (
+                                <PriceTablePopover 
+                                    shortTermPrices={contract.shortTermPrices} 
+                                    pricingType={contract.shortTermPricingType === 'DAILY' ? 'DAILY' : 'HOURLY'} 
+                                    priceTableType={contract.priceTableType}
+                                    highlightPrice={true} 
+                                />
                             ) : (
                                 <Badge variant="outline" className="text-[10px] h-5 px-2 bg-primary/5 text-primary border-primary/20">
                                     {t('rooms.priceTable')}
@@ -254,7 +281,7 @@ export default function RoomCard({
                                     </p>
                                     <span className="text-xs font-bold text-primary">
                                         {formatCurrency(contract.electricityPrice || 0)}
-                                        <span className="text-[9px] opacity-60 ml-0.5 font-normal">/{t('contracts.unitIndex').toLowerCase()}</span>
+                                        <span className="text-[9px] text-muted-foreground ml-0.5 font-normal">/{t('contracts.unitIndex').toLowerCase()}</span>
                                     </span>
                                 </div>
                                 <div className="bg-muted/40 dark:bg-white/10 rounded p-1.5 border border-border/50 dark:border-white/10 shadow-sm flex flex-col justify-center">
@@ -263,7 +290,7 @@ export default function RoomCard({
                                     </p>
                                     <span className="text-xs font-bold text-primary">
                                         {formatCurrency(contract.waterPrice || 0)}
-                                        <span className="text-[9px] opacity-60 ml-0.5 font-normal">/{t('contracts.unitIndex').toLowerCase()}</span>
+                                        <span className="text-[9px] text-muted-foreground ml-0.5 font-normal">/{t('contracts.unitIndex').toLowerCase()}</span>
                                     </span>
                                 </div>
                             </div>
@@ -271,64 +298,45 @@ export default function RoomCard({
 
                         {/* Services Only (if any) */}
                         {contract.serviceCharges && contract.serviceCharges.length > 0 && (
-                            <div className="pt-1 border-t border-border/40 space-y-1">
-                                <div className="space-y-1 mt-1">
-                                    <div className="flex items-center justify-between mb-1.5">
-                                        <div className="flex items-center gap-1.5 opacity-70">
-                                            <Package className="h-3 w-3" />
-                                            <p className="text-[10px] uppercase font-bold tracking-wider">{t('contracts.services')}</p>
-                                        </div>
-                                        <span className="text-[10px] font-bold text-primary">
-                                            <span className="text-muted-foreground font-medium mr-1">{t('common.totalShort')}:</span>
-                                            {formatCurrency(contract.serviceCharges.reduce((sum, s) => sum + (s.amount * (s.quantity || 1)), 0))}
-                                        </span>
-                                    </div>
-                                    <div className="grid grid-cols-1 gap-1.5">
-                                        {contract.serviceCharges.slice(0, 3).map((s, i) => (
-                                            <div key={i} className="flex justify-between items-center bg-background/50 backdrop-blur-sm px-2 py-1 rounded border border-border/30 text-[10px]">
-                                                <span className="truncate mr-2 max-w-[100px] font-medium text-muted-foreground">
-                                                    {s.name}
-                                                    {(s.quantity || 1) > 1 && <span className="text-[9px] ml-1 bg-primary/10 px-1 rounded text-primary">x{s.quantity}</span>}
+                            <div className="pt-1 border-t border-border/40">
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <div className="flex items-center justify-between cursor-pointer hover:text-primary rounded px-1 py-0.5 transition-colors group" role="button" tabIndex={0}>
+                                            <span className="text-xs text-muted-foreground flex items-center gap-1.5 group-hover:text-foreground">
+                                                <Package className="h-3.5 w-3.5 opacity-60" />
+                                                {t('contracts.services')}
+                                                <span className="text-[9px] text-primary/70 group-hover:text-primary flex items-center gap-0.5">
+                                                    {contract.serviceCharges.length}
+                                                    <ChevronDown className="h-2.5 w-2.5" />
                                                 </span>
-                                                <span className="font-bold shrink-0 text-primary">{formatCurrency(s.amount * (s.quantity || 1))}</span>
+                                            </span>
+                                            <span className="font-bold text-primary text-sm">
+                                                {formatCurrency(contract.serviceCharges.reduce((sum, s) => sum + (s.amount * (s.quantity || 1)), 0))}
+                                            </span>
+                                        </div>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-64 p-3" align="end">
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between border-b pb-1.5 mb-1">
+                                                <p className="font-semibold text-sm">{t('contracts.services')}</p>
+                                                <span className="text-xs font-bold text-primary">
+                                                    {formatCurrency(contract.serviceCharges.reduce((sum, s) => sum + (s.amount * (s.quantity || 1)), 0))}
+                                                </span>
                                             </div>
-                                        ))}
-                                        {contract.serviceCharges.length > 3 && (
-                                            <div className="flex justify-center pt-0.5">
-                                                <Popover>
-                                                    <PopoverTrigger asChild>
-                                                        <div className="cursor-pointer inline-flex" role="button" tabIndex={0}>
-                                                            <Badge variant="secondary" className="text-[9px] h-4 px-2 py-0 bg-muted/50 text-muted-foreground border border-border/30 font-medium hover:bg-muted">
-                                                                +{contract.serviceCharges.length - 3} {t('common.more')}
-                                                            </Badge>
-                                                        </div>
-                                                    </PopoverTrigger>
-                                                    <PopoverContent className="w-64 p-3" align="center">
-                                                        <div className="space-y-2">
-                                                            <div className="flex items-center justify-between border-b pb-1.5 mb-1">
-                                                                <p className="font-semibold text-sm">{t('contracts.services')}</p>
-                                                                <span className="text-xs font-bold text-primary">
-                                                                    {formatCurrency(contract.serviceCharges.reduce((sum, s) => sum + (s.amount * (s.quantity || 1)), 0))}
-                                                                </span>
-                                                            </div>
-                                                            <div className="grid gap-2 max-h-[200px] overflow-y-auto pr-1">
-                                                                {contract.serviceCharges.map((s, i) => (
-                                                                    <div key={i} className="flex justify-between items-center text-xs">
-                                                                        <span className="truncate mr-2 text-muted-foreground">
-                                                                            {s.name}
-                                                                            {(s.quantity || 1) > 1 && <span className="text-[10px] ml-1 bg-primary/10 px-1 rounded text-primary">x{s.quantity}</span>}
-                                                                        </span>
-                                                                        <span className="font-bold shrink-0">{formatCurrency(s.amount * (s.quantity || 1))}</span>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    </PopoverContent>
-                                                </Popover>
+                                            <div className="grid gap-2 max-h-[200px] overflow-y-auto pr-1">
+                                                {contract.serviceCharges.map((s, i) => (
+                                                    <div key={i} className="flex justify-between items-center text-xs">
+                                                        <span className="truncate mr-2 text-muted-foreground">
+                                                            {s.name}
+                                                            {(s.quantity || 1) > 1 && <span className="text-[10px] ml-1 bg-primary/10 px-1 rounded text-primary">x{s.quantity}</span>}
+                                                        </span>
+                                                        <span className="font-bold shrink-0">{formatCurrency(s.amount * (s.quantity || 1))}</span>
+                                                    </div>
+                                                ))}
                                             </div>
-                                        )}
-                                    </div>
-                                </div>
+                                        </div>
+                                    </PopoverContent>
+                                </Popover>
                             </div>
                         )}
                     </div>
@@ -343,139 +351,355 @@ export default function RoomCard({
                     let dateValue = contract.startDate ? format(new Date(contract.startDate), 'dd/MM/yyyy') : '--/--/----';
                     let dateColorClass = "bg-blue-50 text-blue-700 border-blue-100/50";
                     let additionalInfo = null;
+                    let isPaymentDate = false; // Track if this is a payment date (uses Wallet icon)
 
                     if (room.roomType === 'LONG_TERM') {
                         if (room.status === 'DEPOSITED' && contract.startDate) {
-                            dateLabel = t('contracts.startDate');
-                            // Muted style for Deposited
-                            dateColorClass = "bg-gray-100 text-gray-600 border-gray-200";
+                            dateLabel = t('contracts.expectedStartDate');
+                            // Default to blue, will be overridden based on days remaining
+                            dateColorClass = "bg-blue-50 text-blue-700 border-blue-100/50";
 
                             const start = new Date(contract.startDate);
                             const today = new Date();
-                            const diffDays = differenceInCalendarDays(start, today);
+                            const diffCalendarDays = differenceInCalendarDays(start, today);
 
-                            if (diffDays === 0) {
-                                // Today
-                                dateValue = t('common.today'); 
-                                dateColorClass = "bg-orange-100 text-orange-700 border-orange-200 font-bold";
-                            } else if (diffDays < 0) {
-                                // Overdue
+                            if (diffCalendarDays < 0) {
+                                // Overdue (Days only)
+                                dateColorClass = "bg-red-50 text-red-700 border-red-100/50 font-bold";
+                                const overdueDays = Math.abs(diffCalendarDays);
+                                
                                 additionalInfo = (
                                     <span className="text-[10px] font-bold text-red-500 ml-2 flex items-center gap-1">
                                         <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                                        {t('contracts.daysOverdue', { days: Math.abs(diffDays) })}
+                                        {t('contracts.daysOverdue', { days: overdueDays })}
+                                    </span>
+                                );
+                            } else if (diffCalendarDays === 0) {
+                                // Today
+                                dateValue = t('common.today');
+                                dateColorClass = "bg-yellow-50 text-yellow-700 border-yellow-100/50 font-bold";
+                            } else if (diffCalendarDays <= 3) {
+                                // <= 3 Days (Yellow Warning)
+                                dateColorClass = "bg-yellow-50 text-yellow-700 border-yellow-100/50";
+                                additionalInfo = (
+                                    <span className="text-[10px] text-yellow-600 ml-2">
+                                        ({t('contracts.daysRemaining', { days: diffCalendarDays })})
                                     </span>
                                 );
                             } else {
-                                // Remaining
+                                // Normal (> 3 days) - BLUE (already set above)
                                 additionalInfo = (
                                     <span className="text-[10px] text-muted-foreground ml-2">
-                                        ({t('contracts.daysRemaining', { days: diffDays })})
+                                        ({t('contracts.daysRemaining', { days: diffCalendarDays })})
                                     </span>
                                 );
                             }
                         } else if (room.status === 'OCCUPIED' && contract.startDate) {
                             dateLabel = t('contracts.nextPayment');
                             dateColorClass = "bg-green-50 text-green-700 border-green-100/50";
+                            isPaymentDate = true; // Use Wallet icon for payment dates
 
                             // Calculate Next Payment Date
                             const start = new Date(contract.startDate);
                             const today = new Date();
+                            today.setHours(0, 0, 0, 0); // Normalize to start of day
                             const cycleMonths = contract.paymentCycleMonths || 1;
 
-                            // Find next payment date >= today
-                            // Iterative approach to find next future date:
-                            // Start from contract start, jump by cycleMonths until > today (or close to it)
-                            // Ideally we want the *upcoming* payment.
+                            // Determine payment day of month
+                            const payDay = contract.paymentDueDay || start.getDate();
 
-                            // Simplified robust logic:
-                            // 1. Calculate months difference from start to today
-                            // 2. Add that many cycles
+                            // Helper: clamp day to last day of month
+                            const clampDay = (d: Date, day: number) => {
+                                const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+                                d.setDate(Math.min(day, lastDay));
+                            };
 
-                            let currentCycleDate = new Date(start);
+                            // Calculate the earliest allowed payment date:
+                            // First payment must be >= 1 full cycle after contract start
+                            const minFirstPayment = new Date(start.getFullYear(), start.getMonth() + cycleMonths, 1);
 
-                            // Naive loop (safe for reasonable dates)
-                            while (currentCycleDate < today) {
-                                currentCycleDate.setMonth(currentCycleDate.getMonth() + cycleMonths);
+                            // Start scanning from the first cycle after contract start
+                            let nextPayment = new Date(minFirstPayment.getFullYear(), minFirstPayment.getMonth(), 1);
+                            clampDay(nextPayment, payDay);
 
-                                // Apply Due Day constraint if specific
-                                if (contract.paymentDueDay) {
-                                    // If dueDay is 31 or larger than days in month, Date automatically handles it (e.g. Feb 30 -> Mar 2)
-                                    // But usually "Last Day" intent means strictly last day of THAT month.
-                                    // Given "paymentDueDay" is integer 1-31.
-                                    // If user selected 31 (last day), we should clamp to end of month.
-
-                                    const year = currentCycleDate.getFullYear();
-                                    const month = currentCycleDate.getMonth();
-                                    const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
-
-                                    let targetDay = contract.paymentDueDay;
-                                    if (targetDay > lastDayOfMonth) targetDay = lastDayOfMonth;
-
-                                    currentCycleDate.setDate(targetDay);
-
-                                    // Check if setting the day moved it back (e.g. from 31 to 28) or we need to re-verify < today
-                                }
+                            // If the payment day in this month is before start + cycle, advance one more cycle
+                            if (nextPayment < minFirstPayment) {
+                                nextPayment = new Date(nextPayment.getFullYear(), nextPayment.getMonth() + cycleMonths, 1);
+                                clampDay(nextPayment, payDay);
                             }
 
-                            dateValue = format(currentCycleDate, 'dd/MM/yyyy');
+                            // Now advance by cycles until >= today
+                            while (nextPayment < today) {
+                                nextPayment = new Date(nextPayment.getFullYear(), nextPayment.getMonth() + cycleMonths, 1);
+                                clampDay(nextPayment, payDay);
+                            }
+
+                            dateValue = format(nextPayment, 'dd/MM/yyyy');
+                            
+                            // Calculate days remaining until next payment
+                            const diffDays = differenceInCalendarDays(nextPayment, today);
+                            
+                            if (diffDays === 0) {
+                                // Due today
+                                dateColorClass = "bg-orange-100 text-orange-700 border-orange-200 font-bold";
+                                additionalInfo = (
+                                    <span className="text-[10px] font-bold text-orange-600 ml-2">
+                                        ({t('common.today')})
+                                    </span>
+                                );
+                            } else if (diffDays <= 3) {
+                                // Due soon (within 3 days)
+                                dateColorClass = "bg-yellow-50 text-yellow-700 border-yellow-100/50";
+                                additionalInfo = (
+                                    <span className="text-[10px] text-yellow-600 ml-2">
+                                        ({t('contracts.daysRemaining', { days: diffDays })})
+                                    </span>
+                                );
+                            } else {
+                                // Normal - show days remaining
+                                additionalInfo = (
+                                    <span className="text-[10px] text-muted-foreground ml-2">
+                                        ({t('contracts.daysRemaining', { days: diffDays })})
+                                    </span>
+                                );
+                            }
                         }
                     } else {
                         // Short Term Logic
-                        if (contract.endDate) {
+                        if (room.status === 'DEPOSITED') {
+                            // Expected dates for deposited short-term
+                            if (contract.startDate) {
+                                dateLabel = t('contracts.expectedCheckIn');
+                                dateValue = format(new Date(contract.startDate), 'dd/MM/yyyy HH:mm');
+                                dateColorClass = "bg-gray-100 text-gray-600 border-gray-200";
+                                
+                                const start = new Date(contract.startDate);
+                                const today = new Date();
+                                const diffCalendarDays = differenceInCalendarDays(start, today);
+                                const diffMs = start.getTime() - today.getTime();
+                                
+                                if (diffMs < 0) {
+                                    // Overdue
+                                    dateColorClass = "bg-red-50 text-red-700 border-red-100/50 font-bold";
+                                    const absDiffMs = Math.abs(diffMs);
+                                    const overdueDays = Math.floor(absDiffMs / (1000 * 60 * 60 * 24));
+                                    const overdueHours = Math.floor((absDiffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                                    const overdueMinutes = Math.floor((absDiffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+                                    if (overdueDays > 0) {
+                                        additionalInfo = (
+                                            <span className="text-[10px] font-bold text-red-500 ml-2 flex items-center gap-1">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                                                {t('contracts.daysHoursOverdue', { days: overdueDays, hours: overdueHours })}
+                                            </span>
+                                        );
+                                    } else {
+                                        additionalInfo = (
+                                            <span className="text-[10px] font-bold text-red-500 ml-2 flex items-center gap-1">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                                                {overdueHours > 0 
+                                                    ? t('contracts.hoursMinutesOverdue', { hours: overdueHours, minutes: overdueMinutes })
+                                                    : t('contracts.minutesOverdue', { minutes: overdueMinutes })
+                                                }
+                                            </span>
+                                        );
+                                    }
+                                } else if (diffCalendarDays === 0) {
+                                    // Today
+                                    dateValue = `${t('common.today')} ${format(start, 'HH:mm')}`;
+                                    dateColorClass = "bg-yellow-50 text-yellow-700 border-yellow-100/50 font-bold";
+                                } else if (diffCalendarDays <= 3) {
+                                    // <= 3 Days (Yellow Warning) - Show days and hours for Short Term
+                                    dateColorClass = "bg-yellow-50 text-yellow-700 border-yellow-100/50";
+                                    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                                    const diffHoursPart = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+                                    additionalInfo = (
+                                        <span className="text-[10px] text-yellow-600 ml-2">
+                                            ({t('contracts.daysHoursRemaining', { days: diffDays, hours: diffHoursPart })})
+                                        </span>
+                                    );
+                                } else {
+                                    // Normal (> 3 days) - BLUE
+                                    dateColorClass = "bg-blue-50 text-blue-700 border-blue-100/50";
+                                    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                                    const diffHoursPart = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                                    
+                                    additionalInfo = (
+                                        <span className="text-[10px] text-muted-foreground ml-2">
+                                            ({t('contracts.daysHoursRemaining', { days: diffDays, hours: diffHoursPart })})
+                                        </span>
+                                    );
+                                }
+                            }
+                        } else if (contract.endDate) {
+                            // Has checkout - show both checkin and checkout
                             dateLabel = t('contracts.checkOut');
                             const end = new Date(contract.endDate);
                             const today = new Date();
 
                             // Check precise difference
                             const diffHours = Math.floor((end.getTime() - today.getTime()) / (1000 * 60 * 60));
-                            const diffDays = Math.ceil(diffHours / 24);
 
                             dateValue = format(end, 'dd/MM/yyyy HH:mm');
+                            // Calculate days difference for color logic
+                            const diffCalendarDays = differenceInCalendarDays(end, today);
 
                             if (diffHours < 0) {
-                                // Overdue
+                                // Overdue - RED with badge
                                 dateColorClass = "bg-red-50 text-red-700 border-red-100/50";
+                                
+                                const msOverdue = today.getTime() - end.getTime();
+                                const oDays = Math.floor(msOverdue / (1000 * 60 * 60 * 24));
+                                const oHours = Math.floor((msOverdue % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                                const oMinutes = Math.floor((msOverdue % (1000 * 60 * 60)) / (1000 * 60));
+
+                                let overdueText = "";
+                                if (oDays > 0) {
+                                    overdueText = t('contracts.daysHoursMinutesOverdue', { days: oDays, hours: oHours, minutes: oMinutes });
+                                } else if (oHours > 0) {
+                                    overdueText = t('contracts.hoursMinutesOverdue', { hours: oHours, minutes: oMinutes });
+                                } else {
+                                    overdueText = t('contracts.minutesOverdue', { minutes: oMinutes });
+                                }
+
                                 additionalInfo = (
                                     <span className="text-[10px] font-bold text-red-500 ml-2 flex items-center gap-1">
                                         <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                                        {t('contracts.daysOverdue', { days: Math.abs(diffDays) })}
+                                        {overdueText}
+                                    </span>
+                                );
+                            } else if (diffCalendarDays <= 3) {
+                                // Approaching (<= 3 days) - YELLOW
+                                dateColorClass = "bg-yellow-50 text-yellow-700 border-yellow-100/50";
+                                
+                                const msRemaining = end.getTime() - today.getTime();
+                                const rDays = Math.floor(msRemaining / (1000 * 60 * 60 * 24));
+                                const rHours = Math.floor((msRemaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                                const rMinutes = Math.floor((msRemaining % (1000 * 60 * 60)) / (1000 * 60));
+
+                                let remainingText = "";
+                                if (rDays > 0) {
+                                    remainingText = t('contracts.daysHoursMinutesRemaining', { days: rDays, hours: rHours, minutes: rMinutes });
+                                } else if (rHours > 0) {
+                                    remainingText = t('contracts.hoursMinutesRemaining', { hours: rHours, minutes: rMinutes });
+                                } else {
+                                    remainingText = t('contracts.minutesRemaining', { minutes: rMinutes });
+                                }
+
+                                additionalInfo = (
+                                    <span className="text-[10px] font-bold text-yellow-600 ml-2">
+                                        ({remainingText})
                                     </span>
                                 );
                             } else {
-                                // Active / Remaining
-                                dateColorClass = "bg-purple-50 text-purple-700 border-purple-100/50";
-                                if (diffHours < 24) {
+                                // Normal (> 3 days) - BLUE
+                                dateColorClass = "bg-blue-50 text-blue-700 border-blue-100/50";
+                                
+                                const msRemaining = end.getTime() - today.getTime();
+                                const rDays = Math.floor(msRemaining / (1000 * 60 * 60 * 24));
+                                const rHours = Math.floor((msRemaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                                const rMinutes = Math.floor((msRemaining % (1000 * 60 * 60)) / (1000 * 60));
+
+                                if (rDays > 0) {
                                     additionalInfo = (
                                         <span className="text-[10px] text-muted-foreground ml-2">
-                                            ({t('contracts.hoursRemaining', { hours: diffHours })})
+                                            ({t('contracts.daysHoursMinutesRemaining', { days: rDays, hours: rHours, minutes: rMinutes })})
+                                        </span>
+                                    );
+                                } else if (rHours > 0) {
+                                    additionalInfo = (
+                                        <span className="text-[10px] text-muted-foreground ml-2">
+                                            ({t('contracts.hoursMinutesRemaining', { hours: rHours, minutes: rMinutes })})
                                         </span>
                                     );
                                 } else {
                                     additionalInfo = (
                                         <span className="text-[10px] text-muted-foreground ml-2">
-                                            ({t('contracts.daysRemaining', { days: diffDays })})
+                                            ({t('contracts.minutesRemaining', { minutes: rMinutes })})
                                         </span>
                                     );
                                 }
                             }
+
+                            // Calculate status flags for styling
+                            const checkoutEnd = new Date(contract.endDate);
+                            const now = new Date();
+                            const checkoutDiffHours = Math.floor((checkoutEnd.getTime() - now.getTime()) / (1000 * 60 * 60));
+                            const checkoutDiffDays = differenceInCalendarDays(checkoutEnd, now);
+                            const isOverdue = checkoutDiffHours < 0;
+                            const isApproaching = !isOverdue && checkoutDiffDays <= 3;
+                            
+                            // Show both check-in and check-out for SHORT_TERM OCCUPIED
+                            return (
+                                <div className="space-y-0.5 text-[10px]">
+                                    {/* Check-in row */}
+                                    <div className="flex items-center justify-between text-muted-foreground">
+                                        <span className="flex items-center gap-1">
+                                            <Calendar className="h-3 w-3 text-green-500" />
+                                            {t('contracts.checkIn')}
+                                        </span>
+                                        <span className="font-medium text-foreground">
+                                            {contract.startDate ? format(new Date(contract.startDate), 'dd/MM/yyyy HH:mm') : '--/--/---- --:--'}
+                                        </span>
+                                    </div>
+                                    {/* Check-out row */}
+                                    <div className="flex items-center justify-between text-muted-foreground">
+                                        <div className="flex items-center gap-1">
+                                            <Calendar className={`h-3 w-3 ${isOverdue ? 'text-red-500' : isApproaching ? 'text-yellow-500' : 'text-blue-500'}`} />
+                                            <span>{dateLabel}</span>
+                                            {additionalInfo}
+                                        </div>
+                                        <span className={`font-medium ${isOverdue ? 'text-red-600' : isApproaching ? 'text-yellow-600' : 'text-foreground'}`}>
+                                            {dateValue}
+                                        </span>
+                                    </div>
+                                </div>
+                            );
                         } else {
-                            // Fallback if no end date
-                            dateLabel = t('contracts.checkIn');
+                            // No end date - show both check-in and placeholder check-out
+                            return (
+                                <div className="space-y-0.5 text-[10px]">
+                                    {/* Check-in row */}
+                                    <div className="flex items-center justify-between text-muted-foreground">
+                                        <span className="flex items-center gap-1">
+                                            <Calendar className="h-3 w-3 text-green-500" />
+                                            {t('contracts.checkIn')}
+                                        </span>
+                                        <span className="font-medium text-foreground">
+                                            {contract.startDate ? format(new Date(contract.startDate), 'dd/MM/yyyy HH:mm') : '--/--/---- --:--'}
+                                        </span>
+                                    </div>
+                                    {/* Check-out row (placeholder) */}
+                                    <div className="flex items-center justify-between text-muted-foreground">
+                                        <span className="flex items-center gap-1">
+                                            <Calendar className="h-3 w-3 text-gray-400" />
+                                            {t('contracts.checkOut')}
+                                        </span>
+                                        <span className="font-medium text-muted-foreground italic">{t('contracts.notSet')}</span>
+                                    </div>
+                                </div>
+                            );
                         }
                     }
 
-                    return (
+                    // Long-term or Deposited - simpler single row
+                    const iconColor = dateColorClass.includes('red') ? 'text-red-500' : 
+                                     dateColorClass.includes('yellow') || dateColorClass.includes('orange') ? 'text-yellow-500' : 
+                                     dateColorClass.includes('green') ? 'text-green-500' : 'text-blue-500';
+                    const textColor = dateColorClass.includes('red') ? 'text-red-600' : 
+                                     dateColorClass.includes('yellow') || dateColorClass.includes('orange') ? 'text-yellow-600' : 'text-foreground';
+                    
+                    const DateIcon = isPaymentDate ? Wallet : Calendar;
 
-                        <div className={`flex items-center justify-between text-[10px] font-medium px-2 py-1 rounded-md border ${dateColorClass}`}>
-                            <div className="flex items-center">
-                                <span className="flex items-center gap-1 opacity-80">
-                                    <Calendar className="h-3 w-3" />
-                                    {dateLabel}
-                                </span>
+                    return (
+                        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                            <div className="flex items-center gap-1">
+                                <DateIcon className={`h-3 w-3 ${iconColor}`} />
+                                <span>{dateLabel}</span>
                                 {additionalInfo}
                             </div>
-                            <span className="font-bold ml-2">{dateValue}</span>
+                            <span className={`font-medium ${textColor}`}>{dateValue}</span>
                         </div>
                     );
                 })()}
@@ -524,9 +748,12 @@ export default function RoomCard({
         );
     };
 
-    return (
+    // Get tooltip content: prioritize contract notes, fallback to room description
+    const tooltipContent = activeContract?.notes || room.description;
+
+    const cardElement = (
         <Card className={cn(
-            "overflow-hidden border-l-8 transition-all hover:shadow-lg h-full flex flex-col group dark:bg-[#292F3D] bg-gray-100/50 border-gray-200/60",
+            "overflow-hidden border-l-8 transition-all hover:shadow-lg h-full flex flex-col group dark:bg-[#292F3D] bg-[#FFFDFA] border-gray-200/60",
             statusColors[room.status],
             room.status === 'DEPOSITED' && "bg-orange-50/30"
         )}>
@@ -569,14 +796,87 @@ export default function RoomCard({
                                     </Badge>
                                 )}
                                 {(() => {
-                                    if (room.status === 'DEPOSITED' && room.activeContract?.startDate) {
-                                        const start = new Date(room.activeContract.startDate);
+                                                    if (room.status === 'DEPOSITED' && room.activeContract?.startDate) {
+                                                        const start = new Date(room.activeContract.startDate);
+                                                        const now = new Date();
+                                                        
+                                                        // For short-term: compare precise time (including hours/minutes)
+                                                        if (room.roomType === 'SHORT_TERM') {
+                                                            const diffMs = start.getTime() - now.getTime();
+                                                            const diffHours = diffMs / (1000 * 60 * 60);
+                                                            
+                                                            if (diffMs < 0) {
+                                                                // Overdue - đã quá giờ check-in
+                                                                return (
+                                                                    <Badge className="text-[10px] h-5 px-2 font-bold shrink-0 bg-red-500 hover:bg-red-600 text-white border-0 animate-pulse">
+                                                                        {t('contracts.overdue')}
+                                                                    </Badge>
+                                                                );
+                                                            } else if (diffHours <= 1) {
+                                                                // Due very soon (within 1 hour)
+                                                                return (
+                                                                    <Badge className="text-[10px] h-5 px-2 font-bold shrink-0 bg-orange-500 hover:bg-orange-600 text-white border-0">
+                                                                        {t('contracts.dueToday')}
+                                                                    </Badge>
+                                                                );
+                                                            } else if (diffHours <= 24) {
+                                                                // Due today (within 24 hours)
+                                                                return (
+                                                                    <Badge className="text-[10px] h-5 px-2 font-bold shrink-0 bg-yellow-500 hover:bg-yellow-600 text-white border-0">
+                                                                        {t('contracts.approaching')}
+                                                                    </Badge>
+                                                                );
+                                                            }
+                                                        } else {
+                                                            // Long-term: compare by calendar days
+                                                            const diffDays = differenceInCalendarDays(start, now);
+                                                            
+                                                            if (diffDays < 0) {
+                                                                // Overdue - quá hạn
+                                                                return (
+                                                                    <Badge className="text-[10px] h-5 px-2 font-bold shrink-0 bg-red-500 hover:bg-red-600 text-white border-0 animate-pulse">
+                                                                        {t('contracts.overdue')}
+                                                                    </Badge>
+                                                                );
+                                                            } else if (diffDays === 0) {
+                                                                // Due today - đến hạn
+                                                                return (
+                                                                    <Badge className="text-[10px] h-5 px-2 font-bold shrink-0 bg-orange-500 hover:bg-orange-600 text-white border-0">
+                                                                        {t('contracts.dueToday')}
+                                                                    </Badge>
+                                                                );
+                                                            } else if (diffDays <= 3) {
+                                                                // Approaching - sắp đến hạn (within 3 days)
+                                                                return (
+                                                                    <Badge className="text-[10px] h-5 px-2 font-bold shrink-0 bg-yellow-500 hover:bg-yellow-600 text-white border-0">
+                                                                        {t('contracts.approaching')}
+                                                                    </Badge>
+                                                                );
+                                                            }
+                                                        }
+                                                    }
+                                                    return null;
+                                                })()}
+                                {/* Short-term OCCUPIED checkout badges */}
+                                {(() => {
+                                    if (room.status === 'OCCUPIED' && room.roomType === 'SHORT_TERM' && room.activeContract?.endDate) {
+                                        const end = new Date(room.activeContract.endDate);
                                         const today = new Date();
-                                        const diffDays = differenceInCalendarDays(start, today);
-                                        if (diffDays < 0) {
+                                        const diffCalendarDays = differenceInCalendarDays(end, today);
+                                        const diffHours = Math.floor((end.getTime() - today.getTime()) / (1000 * 60 * 60));
+                                        
+                                        if (diffHours < 0) {
+                                            // Overdue checkout
                                             return (
                                                 <Badge className="text-[10px] h-5 px-2 font-bold shrink-0 bg-red-500 hover:bg-red-600 text-white border-0 animate-pulse">
                                                     {t('contracts.overdue')}
+                                                </Badge>
+                                            );
+                                        } else if (diffCalendarDays <= 3) {
+                                            // Approaching checkout (within 3 days)
+                                            return (
+                                                <Badge className="text-[10px] h-5 px-2 font-bold shrink-0 bg-yellow-500 hover:bg-yellow-600 text-white border-0">
+                                                    {t('contracts.approaching')}
                                                 </Badge>
                                             );
                                         }
@@ -622,11 +922,18 @@ export default function RoomCard({
                             )}
                             {room.status === 'DEPOSITED' && activeContract && (
                                 <>
-                                    <DropdownMenuItem onClick={() => onActivateContract?.({ ...activeContract, startDate: activeContract.startDate || new Date().toISOString() })}>
-                                        <Zap className="mr-2 h-4 w-4" />
-                                        {t('contracts.activateTitle')}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => onEditContract?.(activeContract._id)}>
+              {room.status === 'DEPOSITED' && activeContract && (
+                <DropdownMenuItem onClick={() => onActivateContract?.({
+                    _id: activeContract._id,
+                    startDate: activeContract.startDate || new Date().toISOString(),
+                    endDate: activeContract.endDate,
+                    paymentCycleMonths: activeContract.paymentCycleMonths,
+                    paymentDueDay: activeContract.paymentDueDay
+                })}>
+                    <Zap className="mr-2 h-4 w-4" />
+                    {t('contracts.activate')}
+                </DropdownMenuItem>
+            )}                        <DropdownMenuItem onClick={() => onEditContract?.(activeContract._id)}>
                                         <Edit className="mr-2 h-4 w-4" />
                                         {t('contracts.editTitle')}
                                     </DropdownMenuItem>
@@ -662,4 +969,22 @@ export default function RoomCard({
             </CardContent>
         </Card>
     );
+
+    // Only wrap in tooltip if there's content to show
+    if (tooltipContent) {
+        return (
+            <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        {cardElement}
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs">
+                        <p className="text-sm">{tooltipContent}</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+        );
+    }
+
+    return cardElement;
 }

@@ -1,6 +1,7 @@
 import apiClient from '@/api/client';
 import { ActivateContractDialog } from '@/components/ActivateContractDialog';
 import ContractViewModal from '@/components/ContractViewModal';
+import BigCalendar from '@/components/dashboard/BigCalendar';
 import RoomStatusOverview from '@/components/dashboard/RoomStatusOverview';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -29,7 +30,15 @@ export default function DashboardPage() {
 
     // Edit & Activate states
     const [isActivateOpen, setIsActivateOpen] = useState(false);
-    const [contractToActivate, setContractToActivate] = useState<{ _id: string; startDate: string; endDate?: string } | null>(null);
+    const [contractToActivate, setContractToActivate] = useState<{ 
+        _id: string; 
+        startDate: string; 
+        endDate?: string; 
+        contractType?: string; 
+        roomType?: string;
+        paymentCycleMonths?: number; // New prop
+        paymentDueDay?: number;      // New prop
+    } | null>(null);
     const [isEditMode, setIsEditMode] = useState(false);
 
     // Fetch contract data when viewing or editing
@@ -72,7 +81,15 @@ export default function DashboardPage() {
         setIsContractFormOpen(true);
     };
 
-    const handleActivateContract = (contract: { _id: string; startDate: string; endDate?: string }) => {
+    const handleActivateContract = (contract: { 
+        _id: string; 
+        startDate: string; 
+        endDate?: string; 
+        contractType?: string; 
+        roomType?: string;
+        paymentCycleMonths?: number;
+        paymentDueDay?: number;
+    }) => {
         setContractToActivate(contract);
         setIsActivateOpen(true);
     };
@@ -148,6 +165,9 @@ export default function DashboardPage() {
                             </Card>
                         ))}
                     </div>
+
+                    {/* Calendar */}
+                    <BigCalendar />
                 </TabsContent>
 
                 <TabsContent value="board" className="space-y-4">
@@ -159,6 +179,7 @@ export default function DashboardPage() {
                         onActivateContract={handleActivateContract}
                     />
                 </TabsContent>
+
             </Tabs>
 
             {/* Contract Form Modal */}
@@ -195,6 +216,9 @@ export default function DashboardPage() {
                         startDate: contractToActivate.startDate || new Date().toISOString(),
                         endDate: contractToActivate.endDate,
                     }}
+                    contractType={(contractToActivate.contractType || contractToActivate.roomType || 'LONG_TERM') as 'SHORT_TERM' | 'LONG_TERM'}
+                    paymentCycleMonths={contractToActivate.paymentCycleMonths}
+                    paymentDueDay={contractToActivate.paymentDueDay}
                     onConfirm={(data) => {
                         activateMutation.mutate(
                             { id: contractToActivate._id, data },

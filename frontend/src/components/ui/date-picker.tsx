@@ -1,9 +1,8 @@
-import * as React from "react"
-import { format, parse, isValid } from "date-fns"
+import { format, isValid, parse } from "date-fns"
 import { Calendar as CalendarIcon } from "lucide-react"
+import * as React from "react"
 import { useTranslation } from "react-i18next"
 
-import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Input } from "@/components/ui/input"
@@ -12,6 +11,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
 
 interface DatePickerProps {
     value?: Date | string | null;
@@ -19,9 +19,10 @@ interface DatePickerProps {
     className?: string;
     placeholder?: string;
     disabled?: boolean;
+    disabledDate?: (date: Date) => boolean;
 }
 
-export function DatePicker({ value, onChange, className, placeholder, disabled }: DatePickerProps) {
+export function DatePicker({ value, onChange, className, placeholder, disabled, disabledDate }: DatePickerProps) {
     const { t } = useTranslation();
     const defaultPlaceholder = t('common.pickDate');
     const [inputValue, setInputValue] = React.useState<string>("");
@@ -117,6 +118,7 @@ export function DatePicker({ value, onChange, className, placeholder, disabled }
                         mode="single"
                         selected={value ? (typeof value === 'string' ? new Date(value) : value) : undefined}
                         onSelect={handleCalendarSelect}
+                        disabled={disabledDate}
                         initialFocus
                     />
                 </PopoverContent>

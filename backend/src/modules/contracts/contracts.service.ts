@@ -1,14 +1,16 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { ActivateContractDto, CreateContractDto, GetContractsDto, TerminateContractDto, UpdateContractDto } from '@modules/contracts/dto/contract.dto';
+import { Contract, ContractDocument } from '@modules/contracts/schemas/contract.schema';
+import { Invoice, InvoiceDocument } from '@modules/invoices/schemas/invoice.schema';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Contract, ContractDocument } from '@modules/contracts/schemas/contract.schema';
-import { CreateContractDto, UpdateContractDto, GetContractsDto, ActivateContractDto } from '@modules/contracts/dto/contract.dto';
 
+import { ContractStatus, ContractType, RoomStatus, RoomType, ShortTermPricingType, TenantStatus } from '@common/constants/enums';
+import { escapeRegExp } from '@common/utils/string.util';
 import { RoomsService } from '@modules/rooms/rooms.service';
-import { TenantsService } from '@modules/tenants/tenants.service';
 import { ServicesService } from '@modules/services/services.service';
-import { RoomStatus, RoomType, ShortTermPricingType, TenantStatus, ContractStatus, ContractType } from '@common/constants/enums';
-import { normalizeString, escapeRegExp } from '@common/utils/string.util';
+import { TenantsService } from '@modules/tenants/tenants.service';
+import { addMonths, getDaysInMonth, setDate } from 'date-fns';
 
 @Injectable()
 export class ContractsService {
@@ -16,6 +18,7 @@ export class ContractsService {
 
     constructor(
         @InjectModel(Contract.name) private contractModel: Model<ContractDocument>,
+        @InjectModel(Invoice.name) private invoiceModel: Model<InvoiceDocument>,
         private roomsService: RoomsService,
         private tenantsService: TenantsService,
         private servicesService: ServicesService,
@@ -29,6 +32,25 @@ export class ContractsService {
         const timestamp = Date.now().toString(36).toUpperCase();
         const random = Math.floor(1000 + Math.random() * 9000);
         return `HD-${timestamp}-${random}`;
+    }
+
+    /**
+     * Calculate the next payment date based on startDate, paymentCycle, and paymentDueDay
+     * @param startDate The contract start date
+     * @param cycleMonths Number of months in payment cycle (1, 2, 3, 6, 12, etc.)
+     * @param dueDay The day of month payment is due (1-31)
+     * @returns The calculated next payment date
+     */
+    private calculateNextPaymentDate(startDate: Date, cycleMonths: number, dueDay: number): Date {
+        // Add cycle months to start date
+        const targetMonth = addMonths(startDate, cycleMonths);
+        
+        // Handle months with fewer days (e.g., Feb 30 -> Feb 28)
+        const daysInTargetMonth = getDaysInMonth(targetMonth);
+        const actualDueDay = Math.min(dueDay, daysInTargetMonth);
+        
+        // Set the due day on target month
+        return setDate(targetMonth, actualDueDay);
     }
 
     async validateCreateContract(ownerId: string, dto: CreateContractDto, isUpdate = false) {
@@ -85,27 +107,38 @@ export class ContractsService {
             // Table validation (DAILY or HOURLY/TABLE)
             if (dto.shortTermPricingType === ShortTermPricingType.DAILY ||
                 (dto.shortTermPricingType === ShortTermPricingType.HOURLY && dto.hourlyPricingMode === 'TABLE')) {
-                if (!dto.shortTermPrices || dto.shortTermPrices.length === 0) {
-                    throw new BadRequestException('Price table (shortTermPrices) is required');
+                if (!dto.shortTermPrices || dto.shortTermPrices.length < 2) {
+                    throw new BadRequestException('Price table must have at least 2 tiers (first tier and remaining tier)');
+                }
+
+                // First tier must start from 1
+                if (dto.shortTermPrices[0].fromValue !== 1) {
+                    throw new BadRequestException('First price tier must start from 1');
+                }
+
+                // Last tier must have toValue = -1
+                const lastTier = dto.shortTermPrices[dto.shortTermPrices.length - 1];
+                if (lastTier.toValue !== -1) {
+                    throw new BadRequestException('Last price tier must have toValue = -1 (remaining)');
                 }
 
                 dto.shortTermPrices.forEach((tier, index) => {
+                    // Price must be > 0
                     if (tier.price <= 0) throw new BadRequestException(`Price in tier ${index + 1} must be > 0`);
+                    
+                    // toValue must be >= fromValue (except for remaining tier with toValue = -1)
                     if (tier.toValue !== -1 && tier.toValue < tier.fromValue) {
-                        throw new BadRequestException(`Invalid range in tier ${index + 1}`);
+                        throw new BadRequestException(`Invalid range in tier ${index + 1}: end value (${tier.toValue}) must be >= start value (${tier.fromValue})`);
                     }
+                    
+                    // Next tier's fromValue must equal previous tier's toValue + 1
                     if (index > 0) {
                         const prevTier = dto.shortTermPrices![index - 1];
-                        if (tier.fromValue !== prevTier.toValue) {
-                            throw new BadRequestException(`Sequence gap at tier ${index + 1}`);
+                        if (prevTier.toValue !== -1 && tier.fromValue !== prevTier.toValue + 1) {
+                            throw new BadRequestException(`Price tier ${index + 1} must start at ${prevTier.toValue + 1} (previous tier ends at ${prevTier.toValue})`);
                         }
                     }
                 });
-
-                const lastTier = dto.shortTermPrices[dto.shortTermPrices.length - 1];
-                if (!lastTier || lastTier.toValue !== -1) {
-                    throw new BadRequestException('The last price tier must end with -1 (infinity)');
-                }
             }
         }
 
@@ -115,6 +148,30 @@ export class ContractsService {
         if (!dto.startDate) {
             this.logger.warn(`Start date check failed: ${dto.startDate}`);
             throw new BadRequestException('Start date is required');
+        }
+
+        if (dto.endDate) {
+            const start = new Date(dto.startDate);
+            const end = new Date(dto.endDate);
+            
+            // Basic check
+            if (end <= start) {
+                throw new BadRequestException('End Date must be after Start Date');
+            }
+
+            // Long Term Check: End Date > Start Date + Payment Cycle
+            if (dto.contractType === ContractType.LONG_TERM) {
+                const cycleMonths = dto.paymentCycleMonths || 1;
+                // Calculate minimum end date (Start + Cycle)
+                const minEndDate = new Date(start);
+                minEndDate.setMonth(minEndDate.getMonth() + cycleMonths);
+                
+                // If end date is ON or BEFORE the minEndDate, it's invalid
+                // Requirement: strictly greater than date(start + cycle)
+                if (end <= minEndDate) {
+                    throw new BadRequestException(`End Date must be after the first payment cycle (${cycleMonths} months)`);
+                }
+            }
         }
         // 5. Service Charge Validation
         if (dto.serviceCharges && dto.serviceCharges.length > 0) {
@@ -152,6 +209,16 @@ export class ContractsService {
             tenantId = (tenant as any)._id.toString();
         }
 
+        // Calculate nextPaymentDate for long-term contracts
+        let nextPaymentDate: Date | undefined;
+        const contractType = createContractDto.contractType || (createContractDto.roomType as any) || ContractType.LONG_TERM;
+        if (contractType === ContractType.LONG_TERM && createContractDto.startDate) {
+            const cycleMonths = createContractDto.paymentCycleMonths || 1;
+            const dueDay = createContractDto.paymentDueDay || new Date(createContractDto.startDate).getDate();
+            nextPaymentDate = this.calculateNextPaymentDate(new Date(createContractDto.startDate), cycleMonths, dueDay);
+            this.logger.log(`Calculated nextPaymentDate: ${nextPaymentDate.toISOString()}`);
+        }
+
         const contract = new this.contractModel({
             ...createContractDto,
             contractCode: this.generateContractCode(),
@@ -159,9 +226,20 @@ export class ContractsService {
             tenantId: new Types.ObjectId(tenantId),
             ownerId: new Types.ObjectId(ownerId),
             status: createContractDto.status || ContractStatus.ACTIVE,
-            contractType: createContractDto.contractType || (createContractDto.roomType as any) || ContractType.LONG_TERM
+            contractType: contractType,
+            nextPaymentDate: nextPaymentDate
         });
         const savedContract = await contract.save();
+
+        // Sync initial meter readings to room's current indexes (for long-term contracts)
+        if (contractType === ContractType.LONG_TERM && 
+            (createContractDto.initialElectricIndex !== undefined || createContractDto.initialWaterIndex !== undefined)) {
+            this.logger.log(`Syncing meter readings to room: electric=${createContractDto.initialElectricIndex}, water=${createContractDto.initialWaterIndex}`);
+            await this.roomsService.updateIndexes(createContractDto.roomId, ownerId, {
+                currentElectricIndex: createContractDto.initialElectricIndex,
+                currentWaterIndex: createContractDto.initialWaterIndex
+            });
+        }
 
         // If it's a draft, set Room and Tenant status to DEPOSITED
         if (savedContract.status === ContractStatus.DRAFT) {
@@ -173,7 +251,7 @@ export class ContractsService {
             // Update Tenant Status to DEPOSITED
             await this.tenantsService.update(tenantId, ownerId, {
                 status: TenantStatus.DEPOSITED,
-                currentRoomId: createContractDto.roomId,
+                currentRoomId: new Types.ObjectId(createContractDto.roomId),
                 moveInDate: createContractDto.startDate.toISOString()
             }, true);
 
@@ -186,7 +264,7 @@ export class ContractsService {
         // Update Tenant Status to RENTING
         await this.tenantsService.update(tenantId, ownerId, {
             status: TenantStatus.RENTING,
-            currentRoomId: createContractDto.roomId,
+            currentRoomId: new Types.ObjectId(createContractDto.roomId),
             moveInDate: createContractDto.startDate.toISOString()
         }, true);
 
@@ -203,10 +281,24 @@ export class ContractsService {
         contract.status = ContractStatus.ACTIVE;
         contract.startDate = new Date(activateContractDto.startDate);
         if (activateContractDto.endDate) {
-            contract.endDate = new Date(activateContractDto.endDate);
+            const start = new Date(activateContractDto.startDate);
+            const end = new Date(activateContractDto.endDate);
+            if (end <= start) {
+                throw new BadRequestException('End Date must be after Start Date');
+            }
+            contract.endDate = end;
         } else {
             contract.endDate = undefined;
         }
+
+        // Calculate nextPaymentDate for long-term contracts
+        if (contract.contractType === ContractType.LONG_TERM) {
+            const cycleMonths = contract.paymentCycleMonths || 1;
+            const dueDay = contract.paymentDueDay || contract.startDate.getDate();
+            contract.nextPaymentDate = this.calculateNextPaymentDate(contract.startDate, cycleMonths, dueDay);
+            this.logger.log(`Calculated nextPaymentDate on activate: ${contract.nextPaymentDate.toISOString()}`);
+        }
+
         const savedContract = await contract.save();
 
         // Perform status updates: Transition from DEPOSITED to OCCUPIED/RENTING
@@ -214,7 +306,7 @@ export class ContractsService {
 
         await this.tenantsService.update(contract.tenantId.toString(), ownerId, {
             status: TenantStatus.RENTING,
-            currentRoomId: contract.roomId.toString(),
+            currentRoomId: contract.roomId,
             moveInDate: activateContractDto.startDate.toISOString()
         }, true);
 
@@ -268,6 +360,13 @@ export class ContractsService {
             });
         }
 
+        // Filter by Status
+        if (query.status) {
+            pipeline.push({
+                $match: { status: query.status }
+            });
+        }
+
         // Search Filter
         if (search) {
             const escapedSearch = escapeRegExp(search);
@@ -282,6 +381,7 @@ export class ContractsService {
                 }
             });
         }
+
 
         // Pagination Facet
         pipeline.push({
@@ -332,9 +432,36 @@ export class ContractsService {
         }).populate({ path: 'roomId', populate: { path: 'buildingId' } }).exec();
         if (!existingContract) throw new NotFoundException('Contract not found');
 
-        // Only DRAFT contracts can be edited
-        if (existingContract.status !== ContractStatus.DRAFT) {
-            throw new BadRequestException('Only draft contracts can be edited');
+        // Only DRAFT and ACTIVE contracts can be edited
+        if (existingContract.status !== ContractStatus.DRAFT && existingContract.status !== ContractStatus.ACTIVE) {
+            throw new BadRequestException('Only draft or active contracts can be edited');
+        }
+
+        const isActiveContract = existingContract.status === ContractStatus.ACTIVE;
+
+        // For ACTIVE contracts: strip immutable fields
+        if (isActiveContract) {
+            delete (updateContractDto as any).roomId;
+            delete (updateContractDto as any).buildingId;
+            delete (updateContractDto as any).contractType;
+            delete (updateContractDto as any).roomType;
+            delete (updateContractDto as any).startDate;
+
+            // Check if trying to change initial meter indexes
+            const isChangingElectric = updateContractDto.initialElectricIndex !== undefined
+                && updateContractDto.initialElectricIndex !== existingContract.initialElectricIndex;
+            const isChangingWater = updateContractDto.initialWaterIndex !== undefined
+                && updateContractDto.initialWaterIndex !== existingContract.initialWaterIndex;
+
+            if (isChangingElectric || isChangingWater) {
+                const invoiceCount = await this.invoiceModel.countDocuments({
+                    contractId: new Types.ObjectId(id),
+                    isDeleted: { $ne: true },
+                }).exec();
+                if (invoiceCount > 0) {
+                    throw new BadRequestException('Cannot change initial meter indexes after invoices have been created');
+                }
+            }
         }
 
         // Note: roomId and tenantId are not in UpdateContractDto, so they cannot be changed
@@ -408,7 +535,7 @@ export class ContractsService {
 
             await this.tenantsService.update(contract.tenantId.toString(), ownerId, {
                 status: TenantStatus.RENTING,
-                currentRoomId: contract.roomId.toString(),
+                currentRoomId: contract.roomId,
                 moveInDate: contract.startDate?.toISOString()
             }, true);
         }
@@ -435,5 +562,66 @@ export class ContractsService {
         }, true);
 
         await this.contractModel.updateOne({ _id: id }, { $set: { isDeleted: true } }).exec();
+    }
+
+    /**
+     * Terminate a contract (Long-term or Short-term)
+     * - Sets contract status to CLOSED
+     * - Sets terminatedAt date
+     * - Updates room status to AVAILABLE
+     * - Optionally closes the tenant (or keeps ACTIVE for potential re-rental)
+     * @param id Contract ID
+     * @param ownerId Owner ID
+     * @param terminateDto Termination details
+     * @param closeTenant Whether to set tenant status to CLOSED
+     */
+    async terminate(
+        id: string, 
+        ownerId: string, 
+        terminateDto: TerminateContractDto,
+        closeTenant: boolean = false
+    ): Promise<Contract> {
+        const contract = await this.contractModel.findOne({ 
+            _id: new Types.ObjectId(id), 
+            ownerId: new Types.ObjectId(ownerId), 
+            isDeleted: false 
+        }).exec();
+        
+        if (!contract) throw new NotFoundException('Contract not found');
+        
+        // Only ACTIVE contracts can be terminated
+        if (contract.status !== ContractStatus.ACTIVE) {
+            throw new BadRequestException('Only active contracts can be terminated');
+        }
+
+        // Update contract
+        contract.status = ContractStatus.TERMINATED;
+        contract.endDate = new Date(terminateDto.endDate);
+        contract.terminatedAt = new Date();
+        
+        const savedContract = await contract.save();
+        this.logger.log(`Contract ${contract.contractCode} terminated. endDate: ${contract.endDate}, terminatedAt: ${contract.terminatedAt}`);
+
+        // Update room status to AVAILABLE
+        await this.roomsService.updateStatus(contract.roomId.toString(), ownerId, RoomStatus.AVAILABLE);
+
+        // Update tenant status
+        if (closeTenant) {
+            // Close tenant completely
+            await this.tenantsService.update(contract.tenantId.toString(), ownerId, {
+                status: TenantStatus.CLOSED,
+                currentRoomId: null,
+                moveOutDate: terminateDto.endDate.toISOString()
+            }, true);
+        } else {
+            // Keep tenant ACTIVE for potential re-rental
+            await this.tenantsService.update(contract.tenantId.toString(), ownerId, {
+                status: TenantStatus.ACTIVE,
+                currentRoomId: null,
+                moveOutDate: terminateDto.endDate.toISOString()
+            }, true);
+        }
+
+        return savedContract;
     }
 }

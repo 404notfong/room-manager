@@ -1,6 +1,6 @@
-import { IsNotEmpty, IsMongoId, IsNumber, IsDate, IsEnum, IsOptional, IsString, ValidateNested, IsArray } from 'class-validator';
+import { InvoiceStatus, InvoiceType } from '@common/constants/enums';
 import { Type } from 'class-transformer';
-import { InvoiceStatus } from '@common/constants/enums';
+import { IsArray, IsBoolean, IsDate, IsEnum, IsMongoId, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
 
 class ServiceChargeDto {
     @IsString()
@@ -8,6 +8,32 @@ class ServiceChargeDto {
 
     @IsNumber()
     amount: number;
+
+    @IsNumber()
+    @IsOptional()
+    quantity?: number;
+
+    @IsBoolean()
+    @IsOptional()
+    isRecurring?: boolean;
+
+    @IsString()
+    @IsOptional()
+    _id?: string;
+}
+
+class AdjustmentDto {
+    @IsString()
+    @IsNotEmpty()
+    description: string;
+
+    @IsNumber()
+    @IsNotEmpty()
+    amount: number;
+
+    @IsBoolean()
+    @IsOptional()
+    isDiscount?: boolean;  // true = giảm giá, false = phát sinh
 }
 
 export class CreateInvoiceDto {
@@ -23,6 +49,11 @@ export class CreateInvoiceDto {
     @IsNotEmpty()
     tenantId: string;
 
+    // Invoice type
+    @IsEnum(InvoiceType)
+    @IsOptional()
+    invoiceType?: InvoiceType;
+
     @IsNumber()
     @IsNotEmpty()
     month: number;
@@ -31,6 +62,26 @@ export class CreateInvoiceDto {
     @IsNotEmpty()
     year: number;
 
+    // === Short-term specific fields ===
+    @IsDate()
+    @Type(() => Date)
+    @IsOptional()
+    checkInTime?: Date;
+
+    @IsDate()
+    @Type(() => Date)
+    @IsOptional()
+    checkOutTime?: Date;
+
+    @IsNumber()
+    @IsOptional()
+    totalHours?: number;
+
+    @IsNumber()
+    @IsOptional()
+    totalDays?: number;
+
+    // === Electric/Water (Long-term) ===
     @IsNumber()
     @IsOptional()
     previousElectricIndex?: number;
@@ -38,6 +89,10 @@ export class CreateInvoiceDto {
     @IsNumber()
     @IsOptional()
     currentElectricIndex?: number;
+
+    @IsNumber()
+    @IsOptional()
+    initialElectricIndex?: number;
 
     @IsNumber()
     @IsOptional()
@@ -53,8 +108,13 @@ export class CreateInvoiceDto {
 
     @IsNumber()
     @IsOptional()
+    initialWaterIndex?: number;
+
+    @IsNumber()
+    @IsOptional()
     waterPrice?: number;
 
+    // === Charges ===
     @IsNumber()
     @IsNotEmpty()
     rentAmount: number;
@@ -64,6 +124,17 @@ export class CreateInvoiceDto {
     @Type(() => ServiceChargeDto)
     @IsOptional()
     serviceCharges?: ServiceChargeDto[];
+
+    // === Adjustments (additional charges / discounts) ===
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => AdjustmentDto)
+    @IsOptional()
+    adjustments?: AdjustmentDto[];
+
+    // === Contract Snapshot ===
+    @IsOptional()
+    contractSnapshot?: Record<string, any>;
 
     @IsDate()
     @Type(() => Date)
@@ -92,4 +163,11 @@ export class UpdateInvoiceDto {
     @IsString()
     @IsOptional()
     notes?: string;
+
+    // Allow updating adjustments
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => AdjustmentDto)
+    @IsOptional()
+    adjustments?: AdjustmentDto[];
 }

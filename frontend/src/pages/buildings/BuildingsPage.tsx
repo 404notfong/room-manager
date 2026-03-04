@@ -1,19 +1,10 @@
-import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Building2, Search } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import apiClient from '@/api/client';
+import { ColumnVisibilityToggle } from '@/components/ColumnVisibilityToggle';
+import Pagination from '@/components/Pagination';
+import BuildingForm, { BuildingFormData } from '@/components/forms/BuildingForm';
 import { Badge } from '@/components/ui/badge';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Dialog,
     DialogContent,
@@ -23,14 +14,23 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
 import { toast } from '@/hooks/use-toast';
-import apiClient from '@/api/client';
-import Pagination from '@/components/Pagination';
-import BuildingForm, { BuildingFormData } from '@/components/forms/BuildingForm';
-import { formatCellValue } from '@/utils/tableUtils';
+import { ColumnConfig, useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { useDebounce } from '@/hooks/useDebounce';
-import { useColumnVisibility, ColumnConfig } from '@/hooks/useColumnVisibility';
-import { ColumnVisibilityToggle } from '@/components/ColumnVisibilityToggle';
+import { formatCellValue } from '@/utils/tableUtils';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Building2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface Address {
     street: string;
@@ -93,14 +93,10 @@ export default function BuildingsPage() {
     const columnVisibility = useColumnVisibility('buildings', columnConfig);
 
     // Debounce search term would be ideal, but for now passing directly
-    const { data, isPending, error } = useQuery({
+    const { data, isPending } = useQuery({
         queryKey: ['buildings', { page: currentPage, limit: pageSize, search: debouncedSearchTerm }],
         queryFn: () => buildingsApi.getAll({ page: currentPage, limit: pageSize, search: debouncedSearchTerm }),
     });
-
-    console.log('VERSION: 1.0.2 - Fixed Map & V5 Pending');
-    console.log('Buildings Data:', data);
-    console.log('Query Error:', error);
 
     const buildings = Array.isArray(data?.data) ? data.data : [];
     const meta = data?.meta || { total: 0, totalPages: 1 };

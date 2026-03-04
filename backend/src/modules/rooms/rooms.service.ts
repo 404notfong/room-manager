@@ -1,11 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { RoomStatus } from '@common/constants/enums';
+import { escapeRegExp, normalizeString } from '@common/utils/string.util';
+import { Building, BuildingDocument } from '@modules/buildings/schemas/building.schema';
+import { CreateRoomDto, DashboardRoomsDto, GetRoomsDto, UpdateIndexesDto, UpdateRoomDto } from '@modules/rooms/dto/room.dto';
+import { Room, RoomDocument } from '@modules/rooms/schemas/room.schema';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Room, RoomDocument } from '@modules/rooms/schemas/room.schema';
-import { Building, BuildingDocument } from '@modules/buildings/schemas/building.schema';
-import { CreateRoomDto, UpdateRoomDto, UpdateIndexesDto, GetRoomsDto, DashboardRoomsDto } from '@modules/rooms/dto/room.dto';
-import { normalizeString, escapeRegExp } from '@common/utils/string.util';
-import { RoomStatus } from '@common/constants/enums';
 
 @Injectable()
 export class RoomsService {
@@ -24,7 +24,69 @@ export class RoomsService {
         return `R-${timestamp}-${random}`;
     }
 
+    /**
+     * Validate short-term price tiers:
+     * - Each tier's fromValue must equal previous tier's toValue + 1
+     * - All prices must be positive
+     * - Last tier must have toValue = -1 (remaining)
+     */
+    private validateShortTermPrices(prices: { fromValue: number; toValue: number; price: number }[]): void {
+        if (!prices || prices.length < 2) {
+            throw new BadRequestException('Price table must have at least 2 tiers (first tier and remaining tier)');
+        }
+
+        // First tier must start from 1
+        if (prices[0].fromValue !== 1) {
+            throw new BadRequestException('First price tier must start from 1');
+        }
+
+        // Last tier must have toValue = -1
+        const lastTier = prices[prices.length - 1];
+        if (lastTier.toValue !== -1) {
+            throw new BadRequestException('Last price tier must have toValue = -1 (remaining)');
+        }
+
+        // Validate continuity: each tier's fromValue = previous tier's toValue + 1
+        for (let i = 1; i < prices.length; i++) {
+            const prevTier = prices[i - 1];
+            const currTier = prices[i];
+            
+            // Skip validation for last tier's fromValue check against non-remaining tier
+            if (prevTier.toValue !== -1 && currTier.fromValue !== prevTier.toValue + 1) {
+                throw new BadRequestException(
+                    `Price tier ${i + 1} must start at ${prevTier.toValue + 1} (previous tier ends at ${prevTier.toValue})`
+                );
+            }
+
+            // Each tier's toValue must be >= fromValue (except for remaining tier)
+            if (currTier.toValue !== -1 && currTier.toValue < currTier.fromValue) {
+                throw new BadRequestException(
+                    `Price tier ${i + 1} end value (${currTier.toValue}) must be >= start value (${currTier.fromValue})`
+                );
+            }
+        }
+
+        // Non-last tiers must have valid toValue
+        for (let i = 0; i < prices.length - 1; i++) {
+            if (prices[i].toValue < prices[i].fromValue) {
+                throw new BadRequestException(
+                    `Price tier ${i + 1} end value (${prices[i].toValue}) must be >= start value (${prices[i].fromValue})`
+                );
+            }
+        }
+    }
+
     async create(ownerId: string, createRoomDto: CreateRoomDto): Promise<Room> {
+        // Validate short-term prices if using TABLE mode
+        if (
+            createRoomDto.roomType === 'SHORT_TERM' &&
+            (createRoomDto.shortTermPricingType === 'DAILY' || 
+             (createRoomDto.shortTermPricingType === 'HOURLY' && createRoomDto.hourlyPricingMode === 'TABLE')) &&
+            createRoomDto.shortTermPrices
+        ) {
+            this.validateShortTermPrices(createRoomDto.shortTermPrices);
+        }
+
         // Auto-generate unique room code
         let roomCode = this.generateRoomCode();
 
@@ -36,6 +98,7 @@ export class RoomsService {
             roomCode = this.generateRoomCode();
             attempts++;
         }
+
 
         const room = new this.roomModel({
             ...createRoomDto,
@@ -49,14 +112,10 @@ export class RoomsService {
         const savedRoom = await room.save();
 
         // Increment building totalRooms
-        console.log('[RoomsService.create] buildingId:', createRoomDto.buildingId);
         const building = await this.buildingModel.findById(createRoomDto.buildingId);
-        console.log('[RoomsService.create] building found:', building ? building._id : 'null');
         if (building) {
-            console.log('[RoomsService.create] current totalRooms:', building.totalRooms);
             building.totalRooms = (building.totalRooms || 0) + 1;
             await building.save();
-            console.log('[RoomsService.create] new totalRooms:', building.totalRooms);
         }
 
         return savedRoom;
@@ -166,6 +225,19 @@ export class RoomsService {
 
         if (dto.roomName) {
             (dto as any).nameNormalized = normalizeString(dto.roomName);
+        }
+
+        // Validate short-term prices if using TABLE mode
+        const roomType = dto.roomType || existingRoom.roomType;
+        const pricingType = dto.shortTermPricingType || existingRoom.shortTermPricingType;
+        const hourlyMode = dto.hourlyPricingMode || existingRoom.hourlyPricingMode;
+        
+        if (
+            roomType === 'SHORT_TERM' &&
+            (pricingType === 'DAILY' || (pricingType === 'HOURLY' && hourlyMode === 'TABLE')) &&
+            dto.shortTermPrices
+        ) {
+            this.validateShortTermPrices(dto.shortTermPrices);
         }
 
         const room = await this.roomModel
@@ -323,6 +395,8 @@ export class RoomsService {
                     pricePerHour: 1,
                     fixedPrice: 1,
                     shortTermPrices: 1,
+                    priceTableType: 1,
+                    description: 1,
                     roomGroupId: {
                         _id: '$roomGroup._id',
                         name: '$roomGroup.name',
@@ -338,6 +412,8 @@ export class RoomsService {
                         hourlyPricingMode: '$activeContractArr.hourlyPricingMode',
                         pricePerHour: '$activeContractArr.pricePerHour',
                         fixedPrice: '$activeContractArr.fixedPrice',
+                        shortTermPrices: '$activeContractArr.shortTermPrices',
+                        priceTableType: '$activeContractArr.priceTableType',
                         electricityPrice: '$activeContractArr.electricityPrice',
                         waterPrice: '$activeContractArr.waterPrice',
                         serviceCharges: '$activeContractArr.serviceCharges',
@@ -346,6 +422,7 @@ export class RoomsService {
                         paymentCycle: '$activeContractArr.paymentCycle',
                         paymentCycleMonths: '$activeContractArr.paymentCycleMonths',
                         paymentDueDay: '$activeContractArr.paymentDueDay',
+                        notes: '$activeContractArr.notes',
                         tenantId: {
                             _id: '$activeContractArr.tenant._id',
                             fullName: '$activeContractArr.tenant.fullName',
@@ -354,7 +431,7 @@ export class RoomsService {
                     }
                 }
             },
-            { $sort: { 'roomGroup.sortOrder': 1, roomName: 1 } }
+            { $sort: { 'roomGroup.sortOrder': 1, sortOrder: 1, roomName: 1 } }
         ]).exec();
 
         // Group rooms by roomGroupId
@@ -387,6 +464,39 @@ export class RoomsService {
         return {
             groups: Array.from(groupMap.values()),
             ungrouped
+        };
+    }
+
+    /**
+     * Reorder rooms - update sortOrder and optionally roomGroupId
+     * Used for drag-and-drop functionality
+     */
+    async reorderRooms(
+        ownerId: string,
+        items: { roomId: string; roomGroupId?: string | null; sortOrder: number }[]
+    ): Promise<{ success: boolean; updated: number }> {
+        const bulkOps = items.map(item => ({
+            updateOne: {
+                filter: {
+                    _id: new Types.ObjectId(item.roomId),
+                    ownerId: new Types.ObjectId(ownerId),
+                    isDeleted: false
+                },
+                update: {
+                    $set: {
+                        sortOrder: item.sortOrder,
+                        ...(item.roomGroupId !== undefined && {
+                            roomGroupId: item.roomGroupId ? new Types.ObjectId(item.roomGroupId) : null
+                        })
+                    }
+                }
+            }
+        }));
+
+        const result = await this.roomModel.bulkWrite(bulkOps);
+        return {
+            success: true,
+            updated: result.modifiedCount
         };
     }
 }

@@ -4,17 +4,29 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useBuildingStore } from '@/stores/buildingStore';
+import {
+    DndContext,
+    DragEndEvent,
+    DragOverlay,
+    DragStartEvent,
+    PointerSensor,
+    closestCenter,
+    useSensor,
+    useSensors,
+} from '@dnd-kit/core';
+import { arrayMove } from '@dnd-kit/sortable';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Filter, Search, X } from 'lucide-react';
+import { Check, Filter, GripVertical, Search, X } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import RoomCard from './RoomCard';
 import RoomGroupCollapse from './RoomGroupCollapse';
 
 interface Room {
@@ -102,6 +114,12 @@ const roomGroupsApi = {
     },
 };
 
+// Reorder rooms API
+const reorderRoomsApi = async (items: { roomId: string; roomGroupId?: string | null; sortOrder: number }[]) => {
+    const response = await apiClient.patch('/rooms/reorder', { items });
+    return response.data;
+};
+
 export default function RoomStatusOverview({
     onCreateContract,
     onViewContract,
@@ -183,6 +201,112 @@ export default function RoomStatusOverview({
         },
     });
 
+    // Reorder Rooms Mutation
+    const reorderMutation = useMutation({
+        mutationFn: reorderRoomsApi,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['rooms-dashboard'] });
+            toast({ title: t('rooms.reorderSuccess', 'Đã sắp xếp lại phòng') });
+        },
+        onError: () => {
+            toast({ variant: 'destructive', title: t('rooms.reorderError', 'Lỗi khi sắp xếp phòng') });
+        },
+    });
+
+    // Arrange mode state
+    const [isArrangeMode, setIsArrangeMode] = useState(false);
+    const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
+
+    // DnD Sensors
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8, // Minimum drag distance before activation
+            },
+        })
+    );
+
+    // Find room by ID across all groups
+    const findRoomById = (roomId: string): Room | undefined => {
+        for (const group of groupedRooms) {
+            const found = group.rooms.find(r => r._id === roomId);
+            if (found) return found;
+        }
+        return ungroupedRooms.find(r => r._id === roomId);
+    };
+
+    const activeRoom = activeRoomId ? findRoomById(activeRoomId) : null;
+
+    // Handle drag start
+    const handleDragStart = (event: DragStartEvent) => {
+        setActiveRoomId(event.active.id as string);
+    };
+
+    // Handle drag end
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        setActiveRoomId(null);
+
+        if (!over) return;
+
+        const activeId = active.id as string;
+        const overId = over.id as string;
+
+        if (activeId === overId) return;
+
+        // Find source group
+        let sourceGroup: RoomGroup | null = null;
+        let sourceRooms: Room[] = [];
+        
+        for (const group of groupedRooms) {
+            if (group.rooms.find(r => r._id === activeId)) {
+                sourceGroup = group;
+                sourceRooms = group.rooms;
+                break;
+            }
+        }
+        if (!sourceGroup && ungroupedRooms.find(r => r._id === activeId)) {
+            sourceRooms = ungroupedRooms;
+        }
+
+        // Find destination (could be a room in same/different group, or a group droppable)
+        let destGroup: RoomGroup | null = null;
+        let destRooms: Room[] = [];
+        
+        for (const group of groupedRooms) {
+            if (group._id === overId || group.rooms.find(r => r._id === overId)) {
+                destGroup = group;
+                destRooms = group.rooms;
+                break;
+            }
+        }
+        if (!destGroup && (overId === 'ungrouped' || ungroupedRooms.find(r => r._id === overId))) {
+            destRooms = ungroupedRooms;
+        }
+
+        // Calculate new order
+        const oldIndex = sourceRooms.findIndex(r => r._id === activeId);
+        const newIndex = destRooms.findIndex(r => r._id === overId);
+
+        if (sourceGroup?._id === destGroup?._id || (!sourceGroup && !destGroup)) {
+            // Same group - just reorder
+            const newOrder = arrayMove(sourceRooms, oldIndex, newIndex >= 0 ? newIndex : sourceRooms.length);
+            const updates = newOrder.map((room, idx) => ({
+                roomId: room._id,
+                sortOrder: idx,
+            }));
+            reorderMutation.mutate(updates);
+        } else {
+            // Different group - move to new group
+            const updates = [{
+                roomId: activeId,
+                roomGroupId: destGroup?._id || null,
+                sortOrder: newIndex >= 0 ? newIndex : destRooms.length,
+            }];
+            reorderMutation.mutate(updates);
+        }
+    };
+
     // Fetch room details for editing
     const { data: editingRoomData, isLoading: isLoadingRoom } = useQuery({
         queryKey: ['room', editingRoomId],
@@ -209,6 +333,38 @@ export default function RoomStatusOverview({
     const handleEditRoom = (roomId: string) => {
         setEditingRoomId(roomId);
         setIsEditModalOpen(true);
+    };
+
+    // Transform raw API data to match RoomForm expected format (same as RoomsPage)
+    const getEditDefaultValues = (room: any): Partial<RoomFormData> => {
+        return {
+            buildingId: typeof room.buildingId === 'object' ? room.buildingId._id : room.buildingId,
+            roomName: room.roomName,
+            floor: room.floor,
+            area: room.area,
+            maxOccupancy: room.maxOccupancy,
+            status: room.status,
+            description: room.description,
+            roomGroupId: room.roomGroupId ? (typeof room.roomGroupId === 'object' ? room.roomGroupId._id : room.roomGroupId) : undefined,
+            roomType: room.roomType || 'LONG_TERM',
+            defaultElectricPrice: room.defaultElectricPrice,
+            defaultWaterPrice: room.defaultWaterPrice,
+            defaultRoomPrice: room.defaultRoomPrice,
+            defaultTermMonths: room.defaultTermMonths,
+            shortTermPricingType: room.shortTermPricingType,
+            hourlyPricingMode: room.hourlyPricingMode,
+            pricePerHour: room.pricePerHour,
+            shortTermPrices: (!room.shortTermPrices || room.shortTermPrices.length === 0)
+                ? [
+                    { fromValue: 0, toValue: 0, price: 0 },
+                    { fromValue: 0, toValue: -1, price: 0 }
+                ]
+                : room.shortTermPrices,
+            priceTableType: room.priceTableType || 'PROGRESSIVE',
+            fixedPrice: room.fixedPrice,
+            currentElectricIndex: room.currentElectricIndex || 0,
+            currentWaterIndex: room.currentWaterIndex || 0,
+        };
     };
 
     const handleUpdateRoom = (data: RoomFormData) => {
@@ -406,43 +562,81 @@ export default function RoomStatusOverview({
                         ))}
                     </div>
                 ) : (
-                    <div className="space-y-4">
-                        {groupedRooms.map((group) => (
-                            <RoomGroupCollapse
-                                key={group._id}
-                                groupName={group.name}
-                                groupColor={group.color}
-                                rooms={group.rooms}
-                                onCreateContract={onCreateContract}
-                                onViewContract={onViewContract}
-                                onEdit={handleEditRoom}
-                                onToggleStatus={handleToggleStatus}
-                                isTogglingStatus={statusMutation.isPending}
-                                onEditContract={onEditContract}
-                                onActivateContract={onActivateContract}
-                            />
-                        ))}
+                    <>
+                        {/* Arrange Mode Toggle */}
+                        <div className="flex justify-end mb-2">
+                            <Button
+                                variant={isArrangeMode ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setIsArrangeMode(!isArrangeMode)}
+                                className="gap-2"
+                            >
+                                <GripVertical className="h-4 w-4" />
+                                {isArrangeMode ? t('dashboard.doneArranging', 'Xong') : t('dashboard.arrangeRooms', 'Sắp xếp')}
+                            </Button>
+                        </div>
 
-                        {ungroupedRooms.length > 0 && (
-                            <RoomGroupCollapse
-                                groupName={t('dashboard.ungrouped')}
-                                rooms={ungroupedRooms}
-                                onCreateContract={onCreateContract}
-                                onViewContract={onViewContract}
-                                onEdit={handleEditRoom}
-                                onToggleStatus={handleToggleStatus}
-                                isTogglingStatus={statusMutation.isPending}
-                                onEditContract={onEditContract}
-                                onActivateContract={onActivateContract}
-                            />
-                        )}
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragStart={handleDragStart}
+                            onDragEnd={handleDragEnd}
+                        >
+                            <div className="space-y-4">
+                                {groupedRooms.map((group) => (
+                                    <RoomGroupCollapse
+                                        key={group._id}
+                                        groupId={group._id}
+                                        groupName={group.name}
+                                        groupColor={group.color}
+                                        rooms={group.rooms}
+                                        onCreateContract={onCreateContract}
+                                        onViewContract={onViewContract}
+                                        onEdit={handleEditRoom}
+                                        onToggleStatus={handleToggleStatus}
+                                        isTogglingStatus={statusMutation.isPending}
+                                        onEditContract={onEditContract}
+                                        onActivateContract={onActivateContract}
+                                        isDragEnabled={isArrangeMode}
+                                    />
+                                ))}
 
-                        {groupedRooms.length === 0 && ungroupedRooms.length === 0 && (
-                            <div className="text-center py-8 text-muted-foreground">
-                                {t('rooms.noData')}
+                                {ungroupedRooms.length > 0 && (
+                                    <RoomGroupCollapse
+                                        groupName={t('dashboard.ungrouped')}
+                                        rooms={ungroupedRooms}
+                                        onCreateContract={onCreateContract}
+                                        onViewContract={onViewContract}
+                                        onEdit={handleEditRoom}
+                                        onToggleStatus={handleToggleStatus}
+                                        isTogglingStatus={statusMutation.isPending}
+                                        onEditContract={onEditContract}
+                                        onActivateContract={onActivateContract}
+                                        isDragEnabled={isArrangeMode}
+                                    />
+                                )}
+
+                                {groupedRooms.length === 0 && ungroupedRooms.length === 0 && (
+                                    <div className="text-center py-8 text-muted-foreground">
+                                        {t('rooms.noData')}
+                                    </div>
+                                )}
                             </div>
-                        )}
-                    </div>
+
+                            {/* Drag Overlay */}
+                            <DragOverlay>
+                                {activeRoom && (
+                                    <div className="opacity-80 rotate-3 scale-105">
+                                        <RoomCard
+                                            room={activeRoom}
+                                            onCreateContract={onCreateContract}
+                                            onViewContract={onViewContract}
+                                        />
+                                    </div>
+                                )}
+                            </DragOverlay>
+                        </DndContext>
+                    </>
                 )}
             </CardContent>
 
@@ -451,9 +645,14 @@ export default function RoomStatusOverview({
                 setIsEditModalOpen(open);
                 if (!open) setEditingRoomId(null);
             }}>
-                <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0">
-                    <DialogHeader className="px-6 py-4 border-b">
-                        <DialogTitle>{t('rooms.titleEdit')}</DialogTitle>
+                <DialogContent
+                    className="max-w-3xl"
+                    onPointerDownOutside={(e) => e.preventDefault()}
+                    onEscapeKeyDown={(e) => e.preventDefault()}
+                >
+                    <DialogHeader>
+                        <DialogTitle>{t('rooms.editTitle')}</DialogTitle>
+                        <DialogDescription>{t('rooms.editDescription')}</DialogDescription>
                     </DialogHeader>
                     {isLoadingRoom ? (
                         <div className="p-8 space-y-4">
@@ -464,7 +663,7 @@ export default function RoomStatusOverview({
                     ) : (
                         editingRoomData && (
                             <RoomForm
-                                defaultValues={editingRoomData}
+                                defaultValues={getEditDefaultValues(editingRoomData)}
                                 onSubmit={handleUpdateRoom}
                                 onCancel={() => setIsEditModalOpen(false)}
                                 isSubmitting={updateRoomMutation.isPending}

@@ -1,7 +1,8 @@
-import { IsNotEmpty, IsString, IsOptional, IsEmail, IsDateString, IsEnum, IsMongoId, ValidateNested, IsBoolean, IsIn } from 'class-validator';
-import { Type } from 'class-transformer';
 import { TenantStatus } from '@common/constants/enums';
 import { PaginationDto } from '@common/dto/pagination.dto';
+import { Type } from 'class-transformer';
+import { IsDateString, IsEmail, IsEnum, IsIn, IsMongoId, IsNotEmpty, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { Types } from 'mongoose';
 
 class EmergencyContactDto {
     @IsString()
@@ -90,9 +91,8 @@ export class UpdateTenantDto {
     @IsOptional()
     gender?: string;
 
-    @IsMongoId()
     @IsOptional()
-    currentRoomId?: string;
+    currentRoomId?: string | Types.ObjectId | null;
 
     @IsDateString()
     @IsOptional()

@@ -1,7 +1,7 @@
-import { IsNotEmpty, IsMongoId, IsEnum, IsDate, IsDateString, IsNumber, IsArray, IsOptional, IsString, ValidateNested, IsBoolean, ValidateIf } from 'class-validator';
-import { Type, Transform } from 'class-transformer';
-import { ContractType, ContractStatus, PaymentCycle, RoomType, ShortTermPricingType } from '@common/constants/enums';
+import { ContractStatus, ContractType, PaymentCycle, PriceTableType, RoomType, ShortTermPricingType } from '@common/constants/enums';
 import { CreateTenantDto } from '@modules/tenants/dto/tenant.dto';
+import { Type } from 'class-transformer';
+import { IsArray, IsBoolean, IsDate, IsEnum, IsMongoId, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
 
 class ServiceChargeDto {
     @IsString()
@@ -86,6 +86,10 @@ export class CreateContractDto {
     @Type(() => ShortTermPriceTierDto)
     @IsOptional()
     shortTermPrices?: ShortTermPriceTierDto[];
+
+    @IsEnum(PriceTableType)
+    @IsOptional()
+    priceTableType?: PriceTableType;
 
     @Type(() => Date)
     @IsNotEmpty()
@@ -233,6 +237,10 @@ export class UpdateContractDto {
     @IsOptional()
     shortTermPrices?: ShortTermPriceTierDto[];
 
+    @IsEnum(PriceTableType)
+    @IsOptional()
+    priceTableType?: PriceTableType;
+
     @IsEnum(ContractStatus)
     @IsOptional()
     status?: ContractStatus;
@@ -288,6 +296,10 @@ export class GetContractsDto {
     buildingId?: string;
 
     @IsOptional()
+    @IsEnum(ContractStatus)
+    status?: ContractStatus;
+
+    @IsOptional()
     @IsNumber()
     @Type(() => Number)
     page?: number;
@@ -297,6 +309,7 @@ export class GetContractsDto {
     @Type(() => Number)
     limit?: number;
 }
+
 
 export class ActivateContractDto {
     @Type(() => Date)
@@ -308,4 +321,18 @@ export class ActivateContractDto {
     @IsOptional()
     @IsDate()
     endDate?: Date | undefined;
+}
+
+export class TerminateContractDto {
+    @Type(() => Date)
+    @IsNotEmpty()
+    @IsDate()
+    endDate: Date;  // Ngày kết thúc hợp đồng
+
+    @IsBoolean()
+    @IsOptional()
+    createFinalInvoice?: boolean;  // Có tạo hóa đơn cuối không
+
+    @IsOptional()
+    invoiceData?: any;  // Dữ liệu hóa đơn cuối (nếu createFinalInvoice = true)
 }

@@ -1,12 +1,5 @@
-import { useState, useRef } from 'react';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { useTranslation } from 'react-i18next';
-import { User, Check, ChevronDown, Loader2 } from 'lucide-react';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover';
+import apiClient from '@/api/client';
+import { Button } from '@/components/ui/button';
 import {
     Command,
     CommandEmpty,
@@ -15,11 +8,18 @@ import {
     CommandItem,
     CommandList,
 } from '@/components/ui/command';
-import { Button } from '@/components/ui/button';
-import apiClient from '@/api/client';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useDebounce } from '@/hooks/useDebounce';
 import { cn, formatPhoneNumber } from '@/lib/utils';
-import { Skeleton } from '@/components/ui/skeleton';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { Check, ChevronDown, Loader2, User } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 const fetchTenants = async ({ pageParam = 1, search = '' }) => {
     const response = await apiClient.get(`/tenants?page=${pageParam}&limit=10&search=${search}&status=ACTIVE`);
@@ -155,6 +155,7 @@ export default function TenantSelector({ value, onSelect, disabled, error }: Ten
                                         onSelect(tenant._id);
                                         setOpen(false);
                                     }}
+                                    className="group"
                                 >
                                     <Check
                                         className={cn(
@@ -165,7 +166,7 @@ export default function TenantSelector({ value, onSelect, disabled, error }: Ten
                                     <div className="flex flex-col">
                                         <span>{tenant.fullName}</span>
                                         {tenant.phone && (
-                                            <span className="text-xs text-muted-foreground">{formatPhoneNumber(tenant.phone)}</span>
+                                            <span className="text-xs text-muted-foreground group-aria-selected:text-accent-foreground/70">{formatPhoneNumber(tenant.phone)}</span>
                                         )}
                                     </div>
                                 </CommandItem>

@@ -1,5 +1,6 @@
-import { z } from 'zod';
+import { addMonths, getDaysInMonth, setDate as setDateFns, startOfDay } from 'date-fns';
 import { useTranslation } from 'react-i18next';
+import { z } from 'zod';
 
 // Vietnamese phone number regex
 // Supports: 03x, 05x, 07x, 08x, 09x (10 digits) or +84 format (11-12 digits)
@@ -54,12 +55,17 @@ export const useRoomSchema = () => {
         defaultWaterPrice: z.number().min(0).optional(),
         defaultRoomPrice: z.number().min(0).optional(),
         defaultTermMonths: z.number().min(1).optional(),
+        
+        // Current utility indexes (for invoice creation)
+        currentElectricIndex: z.number().min(0).optional(),
+        currentWaterIndex: z.number().min(0).optional(),
 
         // Short-term room fields
         shortTermPricingType: z.enum(['HOURLY', 'DAILY', 'FIXED']).optional(),
         hourlyPricingMode: z.enum(['PER_HOUR', 'TABLE']).optional(), // New: per hour or table
         pricePerHour: z.number().min(0).optional(), // New: price per hour
         shortTermPrices: z.array(shortTermPriceTierSchema).optional(),
+        priceTableType: z.enum(['PROGRESSIVE', 'FLAT']).optional(), // Lũy tiến / Trọn gói
         fixedPrice: z.number().min(0).optional(),
     }).superRefine((data, ctx) => {
         // Long-term room validation
@@ -147,6 +153,25 @@ export const useRoomSchema = () => {
                                     path: ['shortTermPrices', index, 'toValue'],
                                 });
                             }
+                            // Check sequence: fromValue = prevTier.toValue + 1
+                            if (index > 0) {
+                                const prevTier = data.shortTermPrices![index - 1];
+                                if (tier.fromValue !== (prevTier.toValue as number) + 1) {
+                                    ctx.addIssue({
+                                        code: z.ZodIssueCode.custom,
+                                        message: t('validation.sequenceInvalid'),
+                                        path: ['shortTermPrices', index, 'fromValue'],
+                                    });
+                                }
+                            }
+                            // Last entry toValue must be -1
+                            if (index === data.shortTermPrices!.length - 1 && tier.toValue !== -1) {
+                                ctx.addIssue({
+                                    code: z.ZodIssueCode.custom,
+                                    message: t('validation.lastEntryInfinite'),
+                                    path: ['shortTermPrices', index, 'toValue'],
+                                });
+                            }
                         });
                     }
                 }
@@ -173,6 +198,25 @@ export const useRoomSchema = () => {
                             ctx.addIssue({
                                 code: z.ZodIssueCode.custom,
                                 message: t('validation.rangeInvalid'),
+                                path: ['shortTermPrices', index, 'toValue'],
+                            });
+                        }
+                        // Check sequence: fromValue = prevTier.toValue + 1
+                        if (index > 0) {
+                            const prevTier = data.shortTermPrices![index - 1];
+                            if (tier.fromValue !== (prevTier.toValue as number) + 1) {
+                                ctx.addIssue({
+                                    code: z.ZodIssueCode.custom,
+                                    message: t('validation.sequenceInvalid'),
+                                    path: ['shortTermPrices', index, 'fromValue'],
+                                });
+                            }
+                        }
+                        // Last entry toValue must be -1
+                        if (index === data.shortTermPrices!.length - 1 && tier.toValue !== -1) {
+                            ctx.addIssue({
+                                code: z.ZodIssueCode.custom,
+                                message: t('validation.lastEntryInfinite'),
                                 path: ['shortTermPrices', index, 'toValue'],
                             });
                         }
@@ -296,6 +340,7 @@ export const useContractSchema = () => {
             toValue: z.union([z.number().min(0), z.literal(-1)]),
             price: z.number().min(0)
         })).optional(),
+        priceTableType: z.enum(['PROGRESSIVE', 'FLAT']).optional(),
 
         depositAmount: z.number({ required_error: t('validation.required', { field: t('contracts.deposit') }), invalid_type_error: t('validation.required', { field: t('contracts.deposit') }) })
             .min(0, t('validation.min', { field: t('contracts.deposit'), min: 0 })),
@@ -485,10 +530,10 @@ export const useContractSchema = () => {
                             });
                         }
 
-                        // Check sequence
+                        // Check sequence: fromValue = prevTier.toValue + 1
                         if (index > 0) {
                             const prevTier = data.shortTermPrices![index - 1];
-                            if (tier.fromValue !== prevTier.toValue) {
+                            if (tier.fromValue !== (prevTier.toValue as number) + 1) {
                                 ctx.addIssue({
                                     code: z.ZodIssueCode.custom,
                                     message: t('validation.sequenceInvalid'),
@@ -509,7 +554,69 @@ export const useContractSchema = () => {
                 }
             }
         }
+    }).refine((data) => {
+        if (data.startDate && data.endDate) {
+            const start = startOfDay(new Date(data.startDate));
+            const end = startOfDay(new Date(data.endDate));
+            
+            // Basic check
+            if (end <= start) return false;
+
+            // Long Term Check: End Date must be AFTER the first payment due date
+            // Example: startDate=20/01, cycle=3, dueDay=22 => first due date = 22/04 => endDate > 22/04
+            if (data.roomType === 'LONG_TERM') {
+                const cycle = data.paymentCycleMonths || 1;
+                const dueDay = data.paymentDueDay || 1;
+                
+                // Step 1: Add cycle months to start date
+                const targetMonth = addMonths(start, cycle);
+                
+                // Step 2: Get the actual due day (handle months with fewer days)
+                const daysInTargetMonth = getDaysInMonth(targetMonth);
+                const actualDueDay = Math.min(dueDay, daysInTargetMonth);
+                
+                // Step 3: Set the due day on target month
+                const firstDueDate = setDateFns(targetMonth, actualDueDay);
+
+                // End date must be strictly AFTER the first payment due date
+                return end > firstDueDate;
+            }
+            
+            return true;
+        }
+        return true;
+    }, {
+        message: t('validation.endDateAfterPaymentCycle', 'End date must be after the first payment cycle due date'),
+        path: ['endDate'],
     });
+};
+
+/**
+ * Validates that contract end date is AFTER the first payment due date.
+ * Example: startDate=20/01, cycle=3, dueDay=22 => first due date = 22/04 => endDate must be > 22/04
+ */
+export const validateContractEndDate = (startDate: Date | string, endDate: Date | string, cycleMonths: number, dueDay: number): boolean => {
+    const start = startOfDay(new Date(startDate));
+    const end = startOfDay(new Date(endDate));
+    
+    // Basic check
+    if (end <= start) return false;
+
+    const cycle = cycleMonths || 1;
+    const targetDueDay = dueDay || 1;
+    
+    // Step 1: Add cycle months to start date
+    const targetMonth = addMonths(start, cycle);
+    
+    // Step 2: Get the actual due day (handle months with fewer days, e.g., Feb 30 -> Feb 28)
+    const daysInTargetMonth = getDaysInMonth(targetMonth);
+    const actualDueDay = Math.min(targetDueDay, daysInTargetMonth);
+    
+    // Step 3: Set the due day on target month
+    const firstDueDate = setDateFns(targetMonth, actualDueDay);
+
+    // End date must be strictly AFTER the first payment due date
+    return end > firstDueDate;
 };
 
 export type BuildingFormData = z.infer<ReturnType<typeof useBuildingSchema>>;

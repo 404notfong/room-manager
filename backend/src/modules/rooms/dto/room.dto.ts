@@ -1,7 +1,7 @@
-import { IsNotEmpty, IsString, IsOptional, IsNumber, IsEnum, IsArray, IsMongoId, ValidateNested, Min } from 'class-validator';
-import { Type } from 'class-transformer';
-import { RoomStatus, RoomType, ShortTermPricingType } from '@common/constants/enums';
+import { PriceTableType, RoomStatus, RoomType, ShortTermPricingType } from '@common/constants/enums';
 import { PaginationDto } from '@common/dto/pagination.dto';
+import { Type } from 'class-transformer';
+import { IsArray, IsEnum, IsMongoId, IsNotEmpty, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
 
 // DTO for short-term price tier
 export class ShortTermPriceTierDto {
@@ -119,6 +119,10 @@ export class CreateRoomDto {
     @IsOptional()
     shortTermPrices?: ShortTermPriceTierDto[];
 
+    @IsEnum(PriceTableType)
+    @IsOptional()
+    priceTableType?: PriceTableType;  // PROGRESSIVE (lũy tiến) | FLAT (trọn gói)
+
     @IsNumber()
     @IsOptional()
     @Min(1)
@@ -140,6 +144,17 @@ export class CreateRoomDto {
     @IsString()
     @IsOptional()
     description?: string;
+
+    // === Meter Readings ===
+    @IsNumber()
+    @IsOptional()
+    @Min(0)
+    currentElectricIndex?: number;
+
+    @IsNumber()
+    @IsOptional()
+    @Min(0)
+    currentWaterIndex?: number;
 }
 
 export class UpdateRoomDto {
@@ -206,6 +221,10 @@ export class UpdateRoomDto {
     @IsOptional()
     shortTermPrices?: ShortTermPriceTierDto[];
 
+    @IsEnum(PriceTableType)
+    @IsOptional()
+    priceTableType?: PriceTableType;  // PROGRESSIVE (lũy tiến) | FLAT (trọn gói)
+
     @IsNumber()
     @IsOptional()
     @Min(0)
@@ -227,6 +246,17 @@ export class UpdateRoomDto {
     @IsString()
     @IsOptional()
     description?: string;
+
+    // === Meter Readings ===
+    @IsNumber()
+    @IsOptional()
+    @Min(0)
+    currentElectricIndex?: number;
+
+    @IsNumber()
+    @IsOptional()
+    @Min(0)
+    currentWaterIndex?: number;
 }
 
 export class UpdateIndexesDto {
@@ -237,4 +267,26 @@ export class UpdateIndexesDto {
     @IsNumber()
     @IsOptional()
     currentWaterIndex?: number;
+}
+
+// DTO for reorder rooms (drag-and-drop)
+export class ReorderRoomItemDto {
+    @IsMongoId()
+    @IsNotEmpty()
+    roomId: string;
+
+    @IsMongoId()
+    @IsOptional()
+    roomGroupId?: string | null;
+
+    @IsNumber()
+    @Min(0)
+    sortOrder: number;
+}
+
+export class ReorderRoomsDto {
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => ReorderRoomItemDto)
+    items: ReorderRoomItemDto[];
 }

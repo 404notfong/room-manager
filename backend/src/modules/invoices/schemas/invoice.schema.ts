@@ -1,8 +1,23 @@
+import { InvoiceStatus, InvoiceType } from '@common/constants/enums';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { InvoiceStatus } from '@common/constants/enums';
 
 export type InvoiceDocument = Invoice & Document;
+
+// Sub-schema for adjustments (additionalCharges / discounts)
+@Schema({ _id: false })
+export class InvoiceAdjustment {
+    @Prop({ required: true })
+    description: string;
+
+    @Prop({ required: true })
+    amount: number;
+
+    @Prop({ default: false })
+    isDiscount: boolean;  // true = giảm giá, false = phát sinh
+}
+
+export const InvoiceAdjustmentSchema = SchemaFactory.createForClass(InvoiceAdjustment);
 
 @Schema({ timestamps: true })
 export class Invoice {
@@ -21,6 +36,10 @@ export class Invoice {
     @Prop({ required: true, unique: true, index: true })
     invoiceNumber: string;
 
+    // Invoice type: REGULAR (monthly) or FINAL (contract termination)
+    @Prop({ type: String, enum: InvoiceType, default: InvoiceType.REGULAR })
+    invoiceType: InvoiceType;
+
     @Prop({
         type: {
             month: Number,
@@ -32,6 +51,19 @@ export class Invoice {
         month: number;
         year: number;
     };
+
+    // === Short-term specific fields ===
+    @Prop()
+    checkInTime: Date;
+
+    @Prop()
+    checkOutTime: Date;
+
+    @Prop({ default: 0 })
+    totalHours: number;     // For hourly pricing
+
+    @Prop({ default: 0 })
+    totalDays: number;      // For daily pricing
 
     // Electric
     @Prop({ default: 0 })
@@ -102,6 +134,14 @@ export class Invoice {
 
     @Prop({ trim: true })
     notes: string;
+
+    // === Adjustments (additional charges / discounts) ===
+    @Prop({ type: [InvoiceAdjustmentSchema], default: [] })
+    adjustments: InvoiceAdjustment[];
+
+    // === Contract Snapshot (frozen at invoice creation) ===
+    @Prop({ type: Object })
+    contractSnapshot: Record<string, any>;
 
     @Prop({ default: false })
     isDeleted: boolean;

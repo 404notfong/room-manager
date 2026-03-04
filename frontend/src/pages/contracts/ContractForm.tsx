@@ -1,34 +1,36 @@
-import { useEffect, useState, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { useFieldArray, useForm } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 import * as z from 'zod';
-import { Trash2, Plus, Loader2 } from 'lucide-react';
-import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { NumberInput } from '@/components/ui/number-input';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogBody, DialogFooter } from '@/components/ui/dialog';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
-import { useToast } from '@/hooks/use-toast';
 import apiClient from '@/api/client';
-import { useBuildingStore } from '@/stores/buildingStore';
-import { Label } from '@/components/ui/label';
-import { cn, formatPhoneNumber } from '@/lib/utils';
-import { useDebounce } from '@/hooks/useDebounce';
-import ServiceForm, { ServiceFormData } from '@/components/forms/ServiceForm';
 import BuildingSelector from '@/components/BuildingSelector';
+import ServiceForm, { ServiceFormData } from '@/components/forms/ServiceForm';
 import RoomSelector from '@/components/RoomSelector';
 import TenantSelector from '@/components/TenantSelector';
-import { useContractSchema } from '@/lib/validations';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
 import { DatePicker } from '@/components/ui/date-picker';
+import { DateTimePicker } from '@/components/ui/datetime-picker';
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { NumberInput } from '@/components/ui/number-input';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/hooks/use-toast';
+import { useDebounce } from '@/hooks/useDebounce';
+import { cn, formatPhoneNumber } from '@/lib/utils';
+import { useContractSchema } from '@/lib/validations';
+import { useBuildingStore } from '@/stores/buildingStore';
 import { format } from 'date-fns';
 
 type ContractFormValues = z.infer<ReturnType<typeof useContractSchema>>;
@@ -50,6 +52,19 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
     const [isDraft, setIsDraft] = useState(false);
     const isDraftRef = useRef(false);
 
+    // Active contract restrictions
+    const isActiveContract = contract?.status === 'ACTIVE';
+
+    // Check if the contract has any invoices (for meter index editability)
+    const { data: contractInvoices } = useQuery({
+        queryKey: ['contract-invoices', contract?._id],
+        queryFn: async () => {
+            const response = await apiClient.get(`/invoices?contractId=${contract._id}&limit=1`);
+            return response.data;
+        },
+        enabled: !!contract?._id && isActiveContract && open,
+    });
+    const hasInvoices = isActiveContract && (contractInvoices?.data?.length > 0 || contractInvoices?.total > 0);
 
     const [isServiceDialogOpen, setIsServiceDialogOpen] = useState(false);
     const [openServiceCombobox, setOpenServiceCombobox] = useState(false);
@@ -60,6 +75,7 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
     const schema = useContractSchema();
     const form = useForm<ContractFormValues>({
         resolver: zodResolver(schema),
+        mode: 'onChange',
         defaultValues: {
             roomType: 'LONG_TERM',
             paymentCycle: 'MONTHLY',
@@ -72,6 +88,7 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
             endDate: undefined,
             serviceCharges: [],
             shortTermPrices: [],
+            priceTableType: 'PROGRESSIVE',
             pricePerHour: 0,
             fixedPrice: 0,
             initialElectricIndex: 0,
@@ -100,9 +117,36 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
         enabled: !!preSelectedRoomId && open && !contract,
     });
 
+    // Watch start date to update disabled state of end date picker
+    const startDate = form.watch('startDate');
+
     // Auto-select building and room when preSelectedRoomId is provided
     useEffect(() => {
         if (preSelectedRoom && open && !contract) {
+            // IMPORTANT: Reset form completely first to clear any leftover data from previous edit
+            form.reset({
+                roomType: 'LONG_TERM',
+                paymentCycle: 'MONTHLY',
+                paymentDueDay: 1,
+                rentPrice: 0,
+                electricityPrice: 0,
+                waterPrice: 0,
+                depositAmount: 0,
+                startDate: new Date().toISOString().split('T')[0],
+                endDate: undefined,
+                serviceCharges: [],
+                shortTermPrices: [],
+                pricePerHour: 0,
+                fixedPrice: 0,
+                initialElectricIndex: 0,
+                initialWaterIndex: 0,
+                buildingId: '',
+                roomId: '',
+                tenantId: '',
+                notes: '',
+                terms: '',
+            });
+
             const room = preSelectedRoom;
             const buildingId = room.buildingId?._id || room.buildingId;
             if (buildingId) {
@@ -136,18 +180,28 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                 }
             }
             form.setValue('roomId', room._id, { shouldValidate: true });
+            
+            // Auto-fill meter indexes from room's current indexes
+            form.setValue('initialElectricIndex', room.currentElectricIndex || 0);
+            form.setValue('initialWaterIndex', room.currentWaterIndex || 0);
         }
     }, [preSelectedRoom, open, contract, form]);
 
     // Handle contract editing
     useEffect(() => {
         if (contract && open) {
+            const isShortTerm = contract.contractType === 'SHORT_TERM' || contract.roomType === 'SHORT_TERM';
             form.reset({
                 buildingId: contract.roomId?.buildingId?._id || (typeof contract.roomId?.buildingId === 'string' ? contract.roomId.buildingId : '') || contract.buildingId || '',
                 roomId: contract.roomId?._id || contract.roomId || '',
                 tenantId: contract.tenantId?._id || contract.tenantId || '',
-                startDate: contract.startDate ? new Date(contract.startDate).toISOString().split('T')[0] : '',
-                endDate: contract.endDate ? new Date(contract.endDate).toISOString().split('T')[0] : undefined,
+                // For SHORT_TERM, keep full ISO string with time; for LONG_TERM, use date only
+                startDate: contract.startDate 
+                    ? (isShortTerm ? new Date(contract.startDate).toISOString() : new Date(contract.startDate).toISOString().split('T')[0])
+                    : '',
+                endDate: contract.endDate 
+                    ? (isShortTerm ? new Date(contract.endDate).toISOString() : new Date(contract.endDate).toISOString().split('T')[0])
+                    : undefined,
                 roomType: contract.contractType || contract.roomType || 'LONG_TERM',
                 rentPrice: contract.rentPrice || 0,
                 depositAmount: contract.depositAmount || 0,
@@ -166,6 +220,7 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                 hourlyPricingMode: contract.hourlyPricingMode,
                 pricePerHour: contract.pricePerHour || 0,
                 fixedPrice: contract.fixedPrice || 0,
+                priceTableType: contract.priceTableType || 'PROGRESSIVE',
                 shortTermPrices: contract.shortTermPrices || []
             });
             setSelectedBuilding(contract.roomId?.buildingId?._id || (typeof contract.roomId?.buildingId === 'string' ? contract.roomId.buildingId : '') || contract.buildingId || '');
@@ -206,30 +261,35 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
     const currentShortTermType = form.watch('shortTermPricingType');
     const currentHourlyMode = form.watch('hourlyPricingMode');
 
-    // Validations & Logic from RoomForm
+    // Validations & Logic from RoomForm - Updated to use +1 logic
     const handleAddPriceTier = () => {
         if (priceFields.length === 0) {
-            appendPrice({ fromValue: 0, toValue: 0, price: 0 });
-            appendPrice({ fromValue: 0, toValue: -1, price: 0 });
+            // First tier starts from 1
+            appendPrice({ fromValue: 1, toValue: 1, price: 0 });
+            appendPrice({ fromValue: 2, toValue: -1, price: 0 });
         } else {
             const lastIndex = priceFields.length - 1;
             const lastTier = priceFields[lastIndex];
             const secondLastIndex = priceFields.length - 2;
             const prevEndValue = secondLastIndex >= 0 ? (priceFields[secondLastIndex].toValue as number) : 0;
-            const newFromValue = prevEndValue;
+            // New tier starts at prevEndValue + 1
+            const newFromValue = prevEndValue + 1;
 
             const lastTierData = { ...lastTier, fromValue: 0 };
             removePrice(lastIndex);
 
+            // Add new tier (default toValue = fromValue for user to fill in)
             appendPrice({ fromValue: newFromValue, toValue: newFromValue, price: 0 });
-            appendPrice({ fromValue: newFromValue, toValue: -1, price: lastTierData.price });
+            // Re-add the last tier with updated fromValue (new tier's toValue + 1)
+            appendPrice({ fromValue: newFromValue + 1, toValue: -1, price: lastTierData.price });
         }
     };
 
+    // Handle toValue change to update next tier's fromValue (next tier starts at toValue + 1)
     const handleToValueChange = (index: number, value: number) => {
         const nextIndex = index + 1;
         if (nextIndex < priceFields.length) {
-            updatePrice(nextIndex, { ...priceFields[nextIndex], fromValue: value });
+            updatePrice(nextIndex, { ...priceFields[nextIndex], fromValue: value + 1 });
         }
     };
 
@@ -364,11 +424,17 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
             queryClient.invalidateQueries({ queryKey: ['rooms-dashboard'] }); // Refresh dashboard
             toast({ title: t('common.success') });
             onOpenChange(false);
+            onOpenChange(false);
             form.reset();
         },
         onError: (err: any) => {
             console.error(err);
-            toast({ variant: 'destructive', title: err.response?.data?.message || 'Error occurred' });
+            const message = err.response?.data?.message;
+            if (message === 'PHONE_EXIST' || message === 'PHONE_EXISTS') {
+                toast({ variant: 'destructive', title: t('tenants.phoneExists') });
+            } else {
+                toast({ variant: 'destructive', title: message || 'Error occurred' });
+            }
         }
     });
 
@@ -407,7 +473,14 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
         },
         onError: (err: any) => {
             console.error(err);
-            toast({ variant: 'destructive', title: err.response?.data?.message || 'Error occurred' });
+            const message = err.response?.data?.message;
+            if (message === 'PHONE_EXIST' || message === 'PHONE_EXISTS') {
+                toast({ variant: 'destructive', title: t('validation.PHONE_EXISTS') });
+            } else if (message === 'ID_CARD_EXISTS') {
+                toast({ variant: 'destructive', title: t('validation.ID_CARD_EXISTS') });
+            } else {
+                toast({ variant: 'destructive', title: message || t('common.error') });
+            }
         }
     });
 
@@ -454,6 +527,8 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
         }
     };
 
+
+
     // Auto-fill price configuration when room selected
     const handleRoomChange = (room: any) => {
         if (room) {
@@ -463,6 +538,10 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
             form.setValue('rentPrice', room.defaultRoomPrice || 0);
             form.setValue('electricityPrice', room.defaultElectricPrice || 0);
             form.setValue('waterPrice', room.defaultWaterPrice || 0);
+            
+            // Auto-fill initial meter indexes from room's current indexes
+            form.setValue('initialElectricIndex', room.currentElectricIndex || 0);
+            form.setValue('initialWaterIndex', room.currentWaterIndex || 0);
 
             // Auto-fill payment cycle from room's default term
             if (room.roomType === 'LONG_TERM' && room.defaultTermMonths) {
@@ -490,6 +569,7 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                 form.setValue('hourlyPricingMode', room.hourlyPricingMode);
                 form.setValue('pricePerHour', room.pricePerHour || 0);
                 form.setValue('fixedPrice', room.fixedPrice || 0);
+                form.setValue('priceTableType', room.priceTableType || 'PROGRESSIVE');
                 if (room.shortTermPrices && room.shortTermPrices.length > 0) {
                     replacePrices(room.shortTermPrices);
                 } else {
@@ -556,7 +636,7 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                         toast({
                             variant: "destructive",
                             title: t('common.error'),
-                            description: "Vui lòng kiểm tra lại thông tin nhập liệu"
+                            description: t('validation.pleaseCheckInput', 'Vui lòng kiểm tra lại thông tin nhập liệu')
                         });
                     })} className="flex flex-col flex-1 overflow-hidden">
                         <DialogBody>
@@ -632,7 +712,7 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                                                     render={({ field }) => (
                                                         <FormItem>
                                                             <FormLabel>{t('contracts.type')}</FormLabel>
-                                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                            <Select onValueChange={field.onChange} value={field.value} disabled={isActiveContract}>
                                                                 <FormControl>
                                                                     <SelectTrigger>
                                                                         <SelectValue />
@@ -644,10 +724,14 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                                                                 </SelectContent>
                                                             </Select>
                                                             <FormMessage />
-                                                            <p className="text-xs text-muted-foreground">
-                                                                <span className="font-medium">{t('rooms.roomTypeLongTerm')}:</span> {t('rooms.roomTypeLongTermHint')} • {' '}
-                                                                <span className="font-medium">{t('rooms.roomTypeShortTerm')}:</span> {t('rooms.roomTypeShortTermHint')}
-                                                            </p>
+                                                            {isActiveContract ? (
+                                                                <p className="text-xs text-amber-500">{t('contracts.cannotChangeActiveField')}</p>
+                                                            ) : (
+                                                                <p className="text-xs text-muted-foreground">
+                                                                    <span className="font-medium">{t('rooms.roomTypeLongTerm')}:</span> {t('rooms.roomTypeLongTermHint')} • {' '}
+                                                                    <span className="font-medium">{t('rooms.roomTypeShortTerm')}:</span> {t('rooms.roomTypeShortTermHint')}
+                                                                </p>
+                                                            )}
                                                         </FormItem>
                                                     )}
                                                 />
@@ -731,8 +815,10 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                                                                                 value={field.value}
                                                                                 onChange={field.onChange}
                                                                                 error={!!fieldState.error}
+                                                                                disabled={hasInvoices}
                                                                             />
                                                                         </FormControl>
+                                                                        {hasInvoices && <p className="text-xs text-amber-500">{t('contracts.cannotChangeMeterWithInvoice')}</p>}
                                                                         <FormMessage />
                                                                     </FormItem>
                                                                 )}
@@ -748,8 +834,10 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                                                                                 value={field.value}
                                                                                 onChange={field.onChange}
                                                                                 error={!!fieldState.error}
+                                                                                disabled={hasInvoices}
                                                                             />
                                                                         </FormControl>
+                                                                        {hasInvoices && <p className="text-xs text-amber-500">{t('contracts.cannotChangeMeterWithInvoice')}</p>}
                                                                         <FormMessage />
                                                                     </FormItem>
                                                                 )}
@@ -848,7 +936,47 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                                                                 )}
 
                                                                 {currentHourlyMode === 'TABLE' && (
-                                                                    <div className="space-y-2">
+                                                                    <div className="space-y-4">
+                                                                        {/* Price Table Type Selection */}
+                                                                        <div className="space-y-2">
+                                                                            <Label>{t('rooms.priceTableType')}</Label>
+                                                                            <FormField
+                                                                                control={form.control}
+                                                                                name="priceTableType"
+                                                                                render={({ field }) => (
+                                                                                    <RadioGroup
+                                                                                        value={field.value || 'PROGRESSIVE'}
+                                                                                        onValueChange={field.onChange}
+                                                                                        className="flex flex-col gap-3"
+                                                                                    >
+                                                                                        <div className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                                                                                            <RadioGroupItem value="PROGRESSIVE" id="contract-progressive" className="mt-0.5" />
+                                                                                            <div className="space-y-1">
+                                                                                                <Label htmlFor="contract-progressive" className="font-medium cursor-pointer">
+                                                                                                    {t('rooms.priceTableProgressive')}
+                                                                                                </Label>
+                                                                                                <p className="text-xs text-muted-foreground">
+                                                                                                    {t('rooms.priceTableProgressiveHint')}
+                                                                                                </p>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <div className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                                                                                            <RadioGroupItem value="FLAT" id="contract-flat" className="mt-0.5" />
+                                                                                            <div className="space-y-1">
+                                                                                                <Label htmlFor="contract-flat" className="font-medium cursor-pointer">
+                                                                                                    {t('rooms.priceTableFlat')}
+                                                                                                </Label>
+                                                                                                <p className="text-xs text-muted-foreground">
+                                                                                                    {t('rooms.priceTableFlatHint')}
+                                                                                                </p>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </RadioGroup>
+                                                                                )}
+                                                                            />
+                                                                        </div>
+
+                                                                        <div className="space-y-2">
                                                                         <Label>{t('contracts.priceTable')}</Label>
                                                                         <div className="space-y-2">
                                                                             {priceFields.map((field, index) => {
@@ -926,7 +1054,7 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                                                                                                             const prevField = priceFields[index - 1];
                                                                                                             const nextField = priceFields[index + 1];
                                                                                                             if (nextField) {
-                                                                                                                updatePrice(index + 1, { ...nextField, fromValue: prevField.toValue as number });
+                                                                                                                updatePrice(index + 1, { ...nextField, fromValue: (prevField.toValue as number) + 1 });
                                                                                                             }
                                                                                                             removePrice(index);
                                                                                                         }}
@@ -949,6 +1077,7 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                                                                                 {t('rooms.addPriceTier')}
                                                                             </Button>
                                                                         </div>
+                                                                        </div>
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -956,6 +1085,45 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
 
                                                         {currentShortTermType === 'DAILY' && (
                                                             <div className="space-y-4">
+                                                                {/* Price Table Type Selection */}
+                                                                <div className="space-y-2">
+                                                                    <Label>{t('rooms.priceTableType')}</Label>
+                                                                    <FormField
+                                                                        control={form.control}
+                                                                        name="priceTableType"
+                                                                        render={({ field }) => (
+                                                                            <RadioGroup
+                                                                                value={field.value || 'PROGRESSIVE'}
+                                                                                onValueChange={field.onChange}
+                                                                                className="flex flex-col gap-3"
+                                                                            >
+                                                                                <div className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                                                                                    <RadioGroupItem value="PROGRESSIVE" id="contract-daily-progressive" className="mt-0.5" />
+                                                                                    <div className="space-y-1">
+                                                                                        <Label htmlFor="contract-daily-progressive" className="font-medium cursor-pointer">
+                                                                                            {t('rooms.priceTableProgressive')}
+                                                                                        </Label>
+                                                                                        <p className="text-xs text-muted-foreground">
+                                                                                            {t('rooms.priceTableProgressiveHintDaily')}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                                                                                    <RadioGroupItem value="FLAT" id="contract-daily-flat" className="mt-0.5" />
+                                                                                    <div className="space-y-1">
+                                                                                        <Label htmlFor="contract-daily-flat" className="font-medium cursor-pointer">
+                                                                                            {t('rooms.priceTableFlat')}
+                                                                                        </Label>
+                                                                                        <p className="text-xs text-muted-foreground">
+                                                                                            {t('rooms.priceTableFlatHintDaily')}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </RadioGroup>
+                                                                        )}
+                                                                    />
+                                                                </div>
+
                                                                 <div className="space-y-2">
                                                                     <Label>{t('contracts.priceTable')}</Label>
                                                                     <div className="space-y-2">
@@ -1032,7 +1200,7 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                                                                                                     const prevField = priceFields[index - 1];
                                                                                                     const nextField = priceFields[index + 1];
                                                                                                     if (nextField) {
-                                                                                                        updatePrice(index + 1, { ...nextField, fromValue: prevField.toValue as number });
+                                                                                                        updatePrice(index + 1, { ...nextField, fromValue: (prevField.toValue as number) + 1 });
                                                                                                     }
                                                                                                     removePrice(index);
                                                                                                 }}
@@ -1209,14 +1377,28 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                                                         <FormItem className="flex flex-col">
                                                             <FormLabel>{t('contracts.startDate')} <span className="text-destructive">*</span></FormLabel>
                                                             <FormControl>
-                                                                <DatePicker
-                                                                    value={field.value}
-                                                                    onChange={(date) => {
-                                                                        field.onChange(date ? format(date, 'yyyy-MM-dd') : '');
-                                                                    }}
-                                                                    className={cn(fieldState.error && "border-destructive focus-visible:ring-destructive")}
-                                                                />
+                                                                {form.watch('roomType') === 'SHORT_TERM' ? (
+                                                                    <DateTimePicker
+                                                                        value={field.value}
+                                                                        onChange={(date) => {
+                                                                            field.onChange(date ? date.toISOString() : '');
+                                                                        }}
+                                                                        showTime={true}
+                                                                        disabled={isActiveContract}
+                                                                        className={cn(fieldState.error && "border-destructive focus-visible:ring-destructive")}
+                                                                    />
+                                                                ) : (
+                                                                    <DatePicker
+                                                                        value={field.value}
+                                                                        onChange={(date) => {
+                                                                            field.onChange(date ? format(date, 'yyyy-MM-dd') : '');
+                                                                        }}
+                                                                        disabled={isActiveContract}
+                                                                        className={cn(fieldState.error && "border-destructive focus-visible:ring-destructive")}
+                                                                    />
+                                                                )}
                                                             </FormControl>
+                                                            {isActiveContract && <p className="text-xs text-amber-500">{t('contracts.cannotChangeActiveField')}</p>}
                                                             <FormMessage />
                                                         </FormItem>
                                                     )}
@@ -1229,13 +1411,59 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                                                             <FormItem className="flex flex-col">
                                                                 <FormLabel>{t('contracts.endDate')}</FormLabel>
                                                                 <FormControl>
-                                                                    <DatePicker
-                                                                        value={field.value}
-                                                                        onChange={(date) => {
-                                                                            field.onChange(date ? format(date, 'yyyy-MM-dd') : undefined);
-                                                                        }}
-                                                                        className={cn(fieldState.error && "border-destructive focus-visible:ring-destructive")}
-                                                                    />
+                                                                    {form.watch('roomType') === 'SHORT_TERM' ? (
+                                                                        <DateTimePicker
+                                                                            value={field.value}
+                                                                            onChange={(date) => {
+                                                                                field.onChange(date ? date.toISOString() : undefined);
+                                                                            }}
+                                                                            showTime={true}
+                                                                            disabledDate={(date) => {
+                                                                                if (!startDate) return false;
+                                                                                const start = new Date(startDate);
+                                                                                // Normalize start date to beginning of day for comparison
+                                                                                start.setHours(0, 0, 0, 0);
+                                                                                // For Short Term, allow same day (so only disable previous days)
+                                                                                // Calendar date is typically 00:00:00
+                                                                                return date < start;
+                                                                            }}
+                                                                            className={cn(fieldState.error && "border-destructive focus-visible:ring-destructive")}
+                                                                        />
+                                                                    ) : (
+                                                                        <DatePicker
+                                                                            value={field.value}
+                                                                            onChange={(date) => {
+                                                                                field.onChange(date ? format(date, 'yyyy-MM-dd') : undefined);
+                                                                            }}
+                                                                            disabledDate={(date) => {
+                                                                                if (!startDate) return false;
+                                                                                const start = new Date(startDate);
+                                                                                start.setHours(0, 0, 0, 0);
+                                                                                
+                                                                                // For LONG_TERM: End Date must be AFTER first payment due date
+                                                                                // Example: startDate=20/01, cycle=3, dueDay=22 => disable <= 22/04
+                                                                                const cycleMonths = form.getValues('paymentCycleMonths') || 1;
+                                                                                const dueDay = form.getValues('paymentDueDay') || 1;
+                                                                                
+                                                                                // Step 1: Add cycle months to start date
+                                                                                const targetMonth = new Date(start);
+                                                                                targetMonth.setMonth(targetMonth.getMonth() + cycleMonths);
+                                                                                
+                                                                                // Step 2: Set due day (handle month overflow)
+                                                                                const year = targetMonth.getFullYear();
+                                                                                const month = targetMonth.getMonth();
+                                                                                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                                                                                const actualDueDay = Math.min(dueDay, daysInMonth);
+                                                                                
+                                                                                const firstDueDate = new Date(year, month, actualDueDay);
+                                                                                firstDueDate.setHours(0, 0, 0, 0);
+
+                                                                                // Disable if date is ON or BEFORE first payment due date
+                                                                                return date <= firstDueDate;
+                                                                            }}
+                                                                            className={cn(fieldState.error && "border-destructive focus-visible:ring-destructive")}
+                                                                        />
+                                                                    )}
                                                                 </FormControl>
                                                                 <FormMessage />
                                                             </FormItem>
@@ -1259,7 +1487,14 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                                                         ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
                                                         : 'text-slate-600 dark:text-slate-400'
                                                         }`}
-                                                    onClick={() => setActiveTab('existing')}
+                                                    onClick={() => {
+                                                        setActiveTab('existing');
+                                                        // Clear newTenant data and errors when switching to existing
+                                                        form.setValue('newTenant', undefined);
+                                                        form.clearErrors('newTenant');
+                                                        // Trigger validation for tenantId field
+                                                        form.trigger('tenantId');
+                                                    }}
                                                 >
                                                     {t('contracts.existingTenant')}
                                                 </button>
@@ -1269,7 +1504,12 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                                                         ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
                                                         : 'text-slate-600 dark:text-slate-400'
                                                         }`}
-                                                    onClick={() => setActiveTab('new')}
+                                                    onClick={() => {
+                                                        setActiveTab('new');
+                                                        // Clear tenantId when switching to new tenant tab
+                                                        form.setValue('tenantId', '');
+                                                        form.clearErrors('tenantId');
+                                                    }}
                                                 >
                                                     {t('contracts.newTenant')}
                                                 </button>

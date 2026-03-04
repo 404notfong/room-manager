@@ -28,6 +28,10 @@
 
 ### Logic
 - [x] Khi token hết hạn hoặc không hợp lệ, redirect đến màn login
+- [x] Bảng giá sẽ chia làm 2 loại: Bảng giá cố định (Fixed) và Bảng giá theo giờ (Table)
+  - [x] Validate logic bảng giá: Mức sau bắt đầu = Mức trước kết thúc + 1 (Frontend & Backend)
+  - [x] UI Bảng giá mới (Table Popover)
+  - [x] Validate logic bảng giá trong Hợp đồng (Frontend & Backend)
 
 ---
 

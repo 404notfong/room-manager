@@ -1,8 +1,8 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
-import { InvoicesService } from '@modules/invoices/invoices.service';
-import { CreateInvoiceDto, UpdateInvoiceDto } from '@modules/invoices/dto/invoice.dto';
-import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '@common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
+import { CreateInvoiceDto, UpdateInvoiceDto } from '@modules/invoices/dto/invoice.dto';
+import { InvoicesService } from '@modules/invoices/invoices.service';
+import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
 
 @Controller('invoices')
 @UseGuards(JwtAuthGuard)
@@ -17,6 +17,11 @@ export class InvoicesController {
     @Get()
     findAll(@CurrentUser() user: any) {
         return this.invoicesService.findAll(user.userId);
+    }
+
+    @Get('contract/:contractId')
+    findByContract(@Param('contractId') contractId: string, @CurrentUser() user: any) {
+        return this.invoicesService.findByContract(contractId, user.userId);
     }
 
     @Get(':id')
