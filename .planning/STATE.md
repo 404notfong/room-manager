@@ -18,13 +18,14 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 
 | Phase | Status | Plans | Progress |
 |-------|--------|-------|----------|
-| 1     | ○      | 0/0   | 0%       |
+| 1     | ✓      | 1/1   | 100%     |
 | 2     | ○      | 0/0   | 0%       |
 | 3     | ○      | 0/0   | 0%       |
 
 ## Session Log
 
 - 2026-03-10: Project initialized, research completed, requirements defined, roadmap created
+- 2026-03-10: Phase 1 executed — tenant history API endpoint (GET /tenants/:id/history)
 
 ---
-*Last updated: 2026-03-10 after initialization*
+*Last updated: 2026-03-10 after phase 1 execution*
