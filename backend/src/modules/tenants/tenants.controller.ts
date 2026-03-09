@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
-import { TenantsService } from '@modules/tenants/tenants.service';
-import { CreateTenantDto, UpdateTenantDto, GetTenantsDto } from '@modules/tenants/dto/tenant.dto';
-import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '@common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
+import { GetTenantHistoryDto } from '@modules/tenants/dto/tenant-history.dto';
+import { CreateTenantDto, GetTenantsDto, UpdateTenantDto } from '@modules/tenants/dto/tenant.dto';
+import { TenantsService } from '@modules/tenants/tenants.service';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 
 @Controller('tenants')
 @UseGuards(JwtAuthGuard)
@@ -17,6 +18,15 @@ export class TenantsController {
     @Get()
     findAll(@CurrentUser() user: any, @Query() query: GetTenantsDto) {
         return this.tenantsService.findAll(user.userId, query);
+    }
+
+    @Get(':id/history')
+    getHistory(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+        @Query() query: GetTenantHistoryDto,
+    ) {
+        return this.tenantsService.getHistory(id, user.userId, query);
     }
 
     @Get(':id')

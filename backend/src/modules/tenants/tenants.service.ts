@@ -1,14 +1,23 @@
 import { TenantStatus } from '@common/constants/enums';
 import { escapeRegExp, normalizeString } from '@common/utils/string.util';
+import { Contract, ContractDocument } from '@modules/contracts/schemas/contract.schema';
+import { Invoice, InvoiceDocument } from '@modules/invoices/schemas/invoice.schema';
+import { Payment, PaymentDocument } from '@modules/payments/schemas/payment.schema';
+import { ContractHistoryData, GetTenantHistoryDto, HistoryEventType, InvoiceHistoryData, PaymentHistoryData, TenantHistoryEvent } from '@modules/tenants/dto/tenant-history.dto';
 import { CreateTenantDto, GetTenantsDto, UpdateTenantDto } from '@modules/tenants/dto/tenant.dto';
 import { Tenant, TenantDocument } from '@modules/tenants/schemas/tenant.schema';
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 
 @Injectable()
 export class TenantsService {
-    constructor(@InjectModel(Tenant.name) private tenantModel: Model<TenantDocument>) { }
+    constructor(
+        @InjectModel(Tenant.name) private tenantModel: Model<TenantDocument>,
+        @InjectModel(Contract.name) private contractModel: Model<ContractDocument>,
+        @InjectModel(Invoice.name) private invoiceModel: Model<InvoiceDocument>,
+        @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
+    ) { }
 
     /**
      * Generate unique tenant code
@@ -186,7 +195,159 @@ export class TenantsService {
     }
 
     async remove(id: string, ownerId: string): Promise<void> {
-        const result = await this.tenantModel.updateOne({ _id: id, ownerId: new Types.ObjectId(ownerId), isDeleted: false }, { $set: { isDeleted: true } }).exec();
-        if (result.matchedCount === 0) throw new NotFoundException('Tenant not found');
+        // H5 Fix: Check if tenant has active contract before deletion
+        const tenant = await this.tenantModel.findOne({
+            _id: id,
+            ownerId: new Types.ObjectId(ownerId),
+            isDeleted: false
+        }).exec();
+        if (!tenant) throw new NotFoundException('Tenant not found');
+
+        if (tenant.status === TenantStatus.RENTING) {
+            throw new BadRequestException('Cannot delete tenant with active contract. Terminate contract first.');
+        }
+
+        await this.tenantModel.updateOne(
+            { _id: id },
+            { $set: { isDeleted: true } }
+        ).exec();
+    }
+
+    async getHistory(tenantId: string, ownerId: string, query: GetTenantHistoryDto) {
+        // Verify tenant exists and belongs to owner
+        await this.findOne(tenantId, ownerId);
+
+        const { type, startDate, endDate, page = 1, limit = 10 } = query;
+        const tenantObjectId = new Types.ObjectId(tenantId);
+
+        // Build date filter
+        const dateFilter: any = {};
+        if (startDate) {
+            dateFilter.$gte = new Date(startDate);
+        }
+        if (endDate) {
+            dateFilter.$lte = new Date(endDate);
+        }
+
+        const baseFilter: any = {
+            tenantId: tenantObjectId,
+            isDeleted: false,
+        };
+
+        if (Object.keys(dateFilter).length > 0) {
+            baseFilter.createdAt = dateFilter;
+        }
+
+        // Query collections based on type filter
+        const shouldQueryContracts = !type || type === HistoryEventType.CONTRACT;
+        const shouldQueryInvoices = !type || type === HistoryEventType.INVOICE;
+        const shouldQueryPayments = !type || type === HistoryEventType.PAYMENT;
+
+        // Build payment date filter (payments use paymentDate, not createdAt)
+        const paymentFilter: any = {
+            tenantId: tenantObjectId,
+            isDeleted: false,
+        };
+        if (Object.keys(dateFilter).length > 0) {
+            paymentFilter.paymentDate = dateFilter;
+        }
+
+        const [contracts, invoices, payments] = await Promise.all([
+            shouldQueryContracts
+                ? this.contractModel.find(baseFilter).populate('roomId', 'roomName roomCode').sort({ createdAt: -1 }).exec()
+                : Promise.resolve([]),
+            shouldQueryInvoices
+                ? this.invoiceModel.find(baseFilter).sort({ createdAt: -1 }).exec()
+                : Promise.resolve([]),
+            shouldQueryPayments
+                ? this.paymentModel.find(paymentFilter).populate('invoiceId', 'invoiceNumber').sort({ paymentDate: -1 }).exec()
+                : Promise.resolve([]),
+        ]);
+
+        // Map to unified TenantHistoryEvent format
+        const events: TenantHistoryEvent[] = [];
+
+        for (const doc of contracts) {
+            const d = doc as any;
+            const room = d.roomId;
+            const contractData: ContractHistoryData = {
+                contractId: d._id.toString(),
+                contractCode: d.contractCode || '',
+                contractType: d.contractType,
+                startDate: d.startDate,
+                endDate: d.endDate,
+                roomName: room?.roomName || '',
+                rentPrice: d.rentPrice,
+                status: d.status,
+            };
+
+            let title = 'Contract created';
+            if (d.status === 'TERMINATED') title = 'Contract terminated';
+            else if (d.status === 'EXPIRED') title = 'Contract expired';
+
+            events.push({
+                type: HistoryEventType.CONTRACT,
+                date: d.createdAt,
+                title,
+                data: contractData,
+            });
+        }
+
+        for (const doc of invoices) {
+            const d = doc as any;
+            const invoiceData: InvoiceHistoryData = {
+                invoiceId: d._id.toString(),
+                invoiceNumber: d.invoiceNumber,
+                totalAmount: d.totalAmount,
+                paidAmount: d.paidAmount,
+                status: d.status,
+                billingPeriod: d.billingPeriod,
+                dueDate: d.dueDate,
+            };
+
+            events.push({
+                type: HistoryEventType.INVOICE,
+                date: d.createdAt,
+                title: `Invoice #${d.invoiceNumber}`,
+                data: invoiceData,
+            });
+        }
+
+        for (const doc of payments) {
+            const d = doc as any;
+            const inv = d.invoiceId;
+            const paymentData: PaymentHistoryData = {
+                paymentId: d._id.toString(),
+                amount: d.amount,
+                paymentMethod: d.paymentMethod,
+                paymentDate: d.paymentDate,
+                invoiceNumber: inv?.invoiceNumber,
+            };
+
+            events.push({
+                type: HistoryEventType.PAYMENT,
+                date: d.paymentDate,
+                title: 'Payment received',
+                data: paymentData,
+            });
+        }
+
+        // Sort all events by date descending
+        events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        // Apply pagination
+        const total = events.length;
+        const start = (page - 1) * limit;
+        const paginatedEvents = events.slice(start, start + limit);
+
+        return {
+            data: paginatedEvents,
+            meta: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit),
+            },
+        };
     }
 }
