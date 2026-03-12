@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Users, Search, Phone, Mail } from 'lucide-react';
+import { Plus, Pencil, Trash2, Users, Search, Phone, Mail, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import TenantHistoryTimeline from '@/components/TenantHistoryTimeline';
 import {
     Table,
     TableBody,
@@ -107,6 +109,7 @@ export default function TenantsPage() {
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+    const [isViewOpen, setIsViewOpen] = useState(false);
 
     const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
@@ -187,6 +190,11 @@ export default function TenantsPage() {
             toast({ variant: 'destructive', title: t('tenants.deleteError') });
         },
     });
+
+    const handleView = (tenant: Tenant) => {
+        setSelectedTenant(tenant);
+        setIsViewOpen(true);
+    };
 
     const handleEdit = (tenant: Tenant) => {
         setSelectedTenant(tenant);
@@ -342,6 +350,9 @@ export default function TenantsPage() {
                                         )}
                                         <TableCell>
                                             <div className="flex items-center gap-1">
+                                                <Button variant="ghost" size="icon" onClick={() => handleView(tenant)}>
+                                                    <Eye className="h-4 w-4" />
+                                                </Button>
                                                 <Button variant="ghost" size="icon" onClick={() => handleEdit(tenant)}>
                                                     <Pencil className="h-4 w-4" />
                                                 </Button>
@@ -434,6 +445,105 @@ export default function TenantsPage() {
                             {t('common.delete')}
                         </Button>
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* View Dialog */}
+            <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+                <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+                    <DialogHeader>
+                        <DialogTitle>{selectedTenant?.fullName}</DialogTitle>
+                        <DialogDescription>{selectedTenant?.code}</DialogDescription>
+                    </DialogHeader>
+                    <Tabs defaultValue="info" className="flex-1 overflow-hidden flex flex-col">
+                        <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="info">{t('tenants.info')}</TabsTrigger>
+                            <TabsTrigger value="history">{t('tenants.history.title')}</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="info" className="flex-1 overflow-y-auto mt-4">
+                            {selectedTenant && (
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">{t('tenants.phone')}</p>
+                                        <p className="font-medium">{formatPhoneNumber(selectedTenant.phone)}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">{t('tenants.email')}</p>
+                                        <p className="font-medium">{selectedTenant.email || '-'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">{t('tenants.idNumber')}</p>
+                                        <p className="font-medium">{selectedTenant.idNumber || '-'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">{t('tenants.dateOfBirth')}</p>
+                                        <p className="font-medium">
+                                            {selectedTenant.dateOfBirth
+                                                ? new Date(selectedTenant.dateOfBirth).toLocaleDateString()
+                                                : '-'}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">{t('tenants.gender')}</p>
+                                        <p className="font-medium">
+                                            {selectedTenant.gender === 'MALE' ? t('tenants.genderMale')
+                                                : selectedTenant.gender === 'FEMALE' ? t('tenants.genderFemale')
+                                                    : selectedTenant.gender === 'OTHER' ? t('tenants.genderOther') : '-'}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">{t('tenants.occupation')}</p>
+                                        <p className="font-medium">{selectedTenant.occupation || '-'}</p>
+                                    </div>
+                                    <div className="col-span-2">
+                                        <p className="text-sm text-muted-foreground">{t('tenants.address')}</p>
+                                        <p className="font-medium">{selectedTenant.address || '-'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">{t('common.status')}</p>
+                                        <Badge
+                                            className={
+                                                selectedTenant.status === 'RENTING' ? 'bg-blue-500 hover:bg-blue-600' :
+                                                    selectedTenant.status === 'ACTIVE' ? 'bg-green-500 hover:bg-green-600' :
+                                                        selectedTenant.status === 'DEPOSITED' ? 'bg-orange-500 hover:bg-orange-600' :
+                                                            'bg-gray-500 hover:bg-gray-600'
+                                            }
+                                        >
+                                            {selectedTenant.status === 'RENTING' ? t('tenants.statusRenting') :
+                                                selectedTenant.status === 'ACTIVE' ? t('tenants.statusActive') :
+                                                    selectedTenant.status === 'DEPOSITED' ? t('tenants.statusDeposited') : t('tenants.statusClosed')}
+                                        </Badge>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">{t('tenants.createdAt')}</p>
+                                        <p className="font-medium">{new Date(selectedTenant.createdAt).toLocaleDateString()}</p>
+                                    </div>
+                                    {selectedTenant.emergencyContact && (
+                                        <div className="col-span-2 border-t pt-3 mt-1">
+                                            <p className="text-sm font-medium mb-2">{t('tenants.emergencyContact')}</p>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                <div>
+                                                    <p className="text-xs text-muted-foreground">{t('tenants.ecName')}</p>
+                                                    <p className="text-sm">{selectedTenant.emergencyContact.name || '-'}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-muted-foreground">{t('tenants.ecPhone')}</p>
+                                                    <p className="text-sm">{selectedTenant.emergencyContact.phone || '-'}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-muted-foreground">{t('tenants.ecRelationship')}</p>
+                                                    <p className="text-sm">{selectedTenant.emergencyContact.relationship || '-'}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </TabsContent>
+                        <TabsContent value="history" className="flex-1 overflow-y-auto mt-4">
+                            {selectedTenant && <TenantHistoryTimeline tenantId={selectedTenant._id} />}
+                        </TabsContent>
+                    </Tabs>
                 </DialogContent>
             </Dialog>
         </div >

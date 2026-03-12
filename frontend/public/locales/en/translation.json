@@ -55,7 +55,9 @@
         "room": "room",
         "vehicle": "vehicle",
         "time": "time",
-        "months": "month(s)"
+        "months": "month(s)",
+        "optional": "Optional",
+        "actions": "Actions"
     },
     "errors": {
         "tooManyRequests": "Too many requests. Please try again in {{seconds}} seconds.",
@@ -375,7 +377,25 @@
         "statusClosed": "Closed",
         "statusDeposited": "Deposited",
         "statusRentAutoHint": "This status is automatically updated via contract",
-        "phoneExists": "Phone number already exists"
+        "phoneExists": "Phone number already exists",
+        "info": "Information",
+        "history": {
+            "title": "History",
+            "noHistory": "No history available",
+            "contractCreated": "Contract created",
+            "contractTerminated": "Contract terminated",
+            "contractExpired": "Contract expired",
+            "invoiceCreated": "Invoice",
+            "paymentReceived": "Payment received",
+            "room": "Room",
+            "rent": "Rent",
+            "amount": "Amount",
+            "method": "Method",
+            "period": "Period",
+            "dueDate": "Due date",
+            "status": "Status",
+            "viewAll": "View all history"
+        }
     },
     "contracts": {
         "title": "Contracts",
@@ -622,7 +642,15 @@
         "notes": "Notes",
         "guest": "Guest",
         "createdForDuration": "Invoice created for {{hours}} hours / {{days}} days",
-        "eachPrice": "each"
+        "eachPrice": "each",
+        "confirmCreateTitle": "Confirm Invoice Creation",
+        "confirmCreateMessage": "Are you sure you want to create this invoice?",
+        "confirmAutoTerminate": "After creation, the following will be automatically updated:",
+        "confirmTerminateContract": "Contract status → Terminated",
+        "confirmRoomAvailable": "Room status → Available",
+        "confirmTenantUpdate": "Tenant status → Active (unlinked from room)",
+        "confirmCreate": "Confirm & Create",
+        "depositDeduction": "Deposit Deduction"
 
     },
     "payments": {
@@ -648,7 +676,12 @@
         "deleteSuccess": "Payment deleted successfully",
         "deleteError": "Failed to delete payment",
         "recordSuccess": "Payment recorded successfully",
-        "recordError": "Failed to record payment"
+        "recordError": "Failed to record payment",
+        "payFull": "Pay Full",
+        "selectMethod": "Select method",
+        "transactionId": "Transaction ID",
+        "invalidAmount": "Please enter a valid amount",
+        "amountExceedsRemaining": "Amount cannot exceed remaining amount ({{amount}})"
     },
     "roomGroups": {
         "title": "Room Groups",

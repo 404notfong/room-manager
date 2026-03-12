@@ -56,7 +56,9 @@
         "room": "phòng",
         "vehicle": "xe",
         "time": "lần",
-        "months": "tháng"
+        "months": "tháng",
+        "optional": "Tùy chọn",
+        "actions": "Thao tác"
     },
     "errors": {
         "tooManyRequests": "Quá nhiều yêu cầu. Vui lòng thử lại sau {{seconds}} giây.",
@@ -377,7 +379,25 @@
         "statusClosed": "Đóng",
         "statusDeposited": "Đã cọc",
         "statusRentAutoHint": "Trạng thái này được cập nhật tự động qua hợp đồng",
-        "phoneExists": "Số điện thoại đã tồn tại trong hệ thống"
+        "phoneExists": "Số điện thoại đã tồn tại trong hệ thống",
+        "info": "Thông tin",
+        "history": {
+            "title": "Lịch sử",
+            "noHistory": "Chưa có lịch sử",
+            "contractCreated": "Tạo hợp đồng",
+            "contractTerminated": "Chấm dứt hợp đồng",
+            "contractExpired": "Hợp đồng hết hạn",
+            "invoiceCreated": "Hóa đơn",
+            "paymentReceived": "Thanh toán",
+            "room": "Phòng",
+            "rent": "Tiền thuê",
+            "amount": "Số tiền",
+            "method": "Phương thức",
+            "period": "Kỳ",
+            "dueDate": "Hạn thanh toán",
+            "status": "Trạng thái",
+            "viewAll": "Xem toàn bộ lịch sử"
+        }
     },
     "contracts": {
         "title": "Quản lý hợp đồng",
@@ -624,7 +644,15 @@
         "notes": "Ghi chú",
         "guest": "Khách",
         "createdForDuration": "Đã tạo hóa đơn cho {{hours}} giờ / {{days}} ngày",
-        "eachPrice": "đơn giá"
+        "eachPrice": "đơn giá",
+        "confirmCreateTitle": "Xác nhận tạo hóa đơn",
+        "confirmCreateMessage": "Bạn có chắc chắn muốn tạo hóa đơn này không?",
+        "confirmAutoTerminate": "Sau khi tạo, hệ thống sẽ tự động cập nhật:",
+        "confirmTerminateContract": "Trạng thái hợp đồng → Đã chấm dứt",
+        "confirmRoomAvailable": "Trạng thái phòng → Trống",
+        "confirmTenantUpdate": "Trạng thái khách thuê → Hoạt động (bỏ liên kết phòng)",
+        "confirmCreate": "Xác nhận & Tạo",
+        "depositDeduction": "Trừ tiền cọc"
 
     },
     "payments": {
@@ -650,7 +678,12 @@
         "deleteSuccess": "Xóa thanh toán thành công",
         "deleteError": "Xóa thanh toán thất bại",
         "recordSuccess": "Ghi nhận thanh toán thành công",
-        "recordError": "Ghi nhận thanh toán thất bại"
+        "recordError": "Ghi nhận thanh toán thất bại",
+        "payFull": "Thanh toán hết",
+        "selectMethod": "Chọn phương thức",
+        "transactionId": "Mã giao dịch",
+        "invalidAmount": "Vui lòng nhập số tiền hợp lệ",
+        "amountExceedsRemaining": "Số tiền không được vượt quá số còn lại ({{amount}})"
     },
     "roomGroups": {
         "title": "Nhóm phòng",
