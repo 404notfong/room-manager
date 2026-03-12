@@ -396,7 +396,15 @@
             "period": "Kỳ",
             "dueDate": "Hạn thanh toán",
             "status": "Trạng thái",
-            "viewAll": "Xem toàn bộ lịch sử"
+            "viewAll": "Xem toàn bộ lịch sử",
+            "allTypes": "Tất cả",
+            "filterByType": "Lọc theo loại",
+            "startDate": "Từ ngày",
+            "endDate": "Đến ngày",
+            "backToTenants": "Quay lại Khách thuê",
+            "expandDetails": "Xem chi tiết",
+            "collapseDetails": "Ẩn chi tiết",
+            "eventsCount": "{{count}} sự kiện"
         }
     },
     "contracts": {

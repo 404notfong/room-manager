@@ -7,6 +7,7 @@ import DashboardPage from '@/pages/dashboard/DashboardPage';
 import BuildingsPage from '@/pages/buildings/BuildingsPage';
 import RoomsPage from '@/pages/rooms/RoomsPage';
 import TenantsPage from '@/pages/tenants/TenantsPage';
+import TenantHistoryPage from '@/pages/tenants/TenantHistoryPage';
 import ContractsPage from '@/pages/contracts/ContractsPage';
 import InvoicesPage from '@/pages/invoices/InvoicesPage';
 import PaymentsPage from '@/pages/payments/PaymentsPage';
@@ -38,6 +39,7 @@ function App() {
                     <Route index element={<DashboardPage />} />
                     <Route path="buildings" element={<BuildingsPage />} />
                     <Route path="rooms" element={<RoomsPage />} />
+                    <Route path="tenants/:id/history" element={<TenantHistoryPage />} />
                     <Route path="tenants" element={<TenantsPage />} />
                     <Route path="contracts" element={<ContractsPage />} />
                     <Route path="invoices" element={<InvoicesPage />} />

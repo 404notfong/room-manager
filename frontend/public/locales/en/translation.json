@@ -394,7 +394,15 @@
             "period": "Period",
             "dueDate": "Due date",
             "status": "Status",
-            "viewAll": "View all history"
+            "viewAll": "View all history",
+            "allTypes": "All types",
+            "filterByType": "Filter by type",
+            "startDate": "Start date",
+            "endDate": "End date",
+            "backToTenants": "Back to Tenants",
+            "expandDetails": "Show details",
+            "collapseDetails": "Hide details",
+            "eventsCount": "{{count}} events"
         }
     },
     "contracts": {

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, Users, Search, Phone, Mail, Eye } from 'lucide-react';
@@ -103,6 +104,7 @@ const tenantsApi = {
 
 export default function TenantsPage() {
     const { t } = useTranslation();
+    const navigate = useNavigate();
     const queryClient = useQueryClient();
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearchTerm = useDebounce(searchTerm, 500);
@@ -541,7 +543,22 @@ export default function TenantsPage() {
                             )}
                         </TabsContent>
                         <TabsContent value="history" className="flex-1 overflow-y-auto mt-4">
-                            {selectedTenant && <TenantHistoryTimeline tenantId={selectedTenant._id} />}
+                            {selectedTenant && (
+                                <div className="space-y-4">
+                                    <TenantHistoryTimeline tenantId={selectedTenant._id} />
+                                    <div className="text-center">
+                                        <Button
+                                            variant="link"
+                                            onClick={() => {
+                                                setIsViewOpen(false);
+                                                navigate(`/tenants/${selectedTenant._id}/history`);
+                                            }}
+                                        >
+                                            {t('tenants.history.viewAll')}
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
                         </TabsContent>
                     </Tabs>
                 </DialogContent>
