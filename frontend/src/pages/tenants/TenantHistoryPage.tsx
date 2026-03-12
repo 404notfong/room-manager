@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, FileText, Receipt, Banknote, Clock, ChevronDown, ChevronUp, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -63,8 +63,8 @@ export default function TenantHistoryPage() {
     const { t } = useTranslation();
 
     const [typeFilter, setTypeFilter] = useState<string>('all');
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
+    const [startDate, setStartDate] = useState<Date | undefined>(undefined);
+    const [endDate, setEndDate] = useState<Date | undefined>(undefined);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
@@ -79,8 +79,8 @@ export default function TenantHistoryPage() {
     // Fetch history
     const queryParams: any = { page: currentPage, limit: pageSize };
     if (typeFilter !== 'all') queryParams.type = typeFilter;
-    if (startDate) queryParams.startDate = startDate;
-    if (endDate) queryParams.endDate = endDate;
+    if (startDate) queryParams.startDate = startDate.toISOString().split('T')[0];
+    if (endDate) queryParams.endDate = endDate.toISOString().split('T')[0];
 
     const { data: historyData, isLoading } = useQuery<HistoryResponse>({
         queryKey: ['tenant-history-page', id, typeFilter, startDate, endDate, currentPage, pageSize],
@@ -100,7 +100,7 @@ export default function TenantHistoryPage() {
         setCurrentPage(1);
     };
 
-    const handleDateChange = (field: 'start' | 'end', value: string) => {
+    const handleDateChange = (field: 'start' | 'end', value: Date | undefined) => {
         if (field === 'start') setStartDate(value);
         else setEndDate(value);
         setCurrentPage(1);
@@ -154,19 +154,17 @@ export default function TenantHistoryPage() {
                             </Select>
                         </div>
                         <div className="flex items-center gap-2">
-                            <Input
-                                type="date"
+                            <DatePicker
                                 value={startDate}
-                                onChange={(e) => handleDateChange('start', e.target.value)}
-                                className="w-[160px]"
+                                onChange={(date) => handleDateChange('start', date)}
+                                className="w-[180px]"
                                 placeholder={t('tenants.history.startDate')}
                             />
                             <span className="text-muted-foreground">→</span>
-                            <Input
-                                type="date"
+                            <DatePicker
                                 value={endDate}
-                                onChange={(e) => handleDateChange('end', e.target.value)}
-                                className="w-[160px]"
+                                onChange={(date) => handleDateChange('end', date)}
+                                className="w-[180px]"
                                 placeholder={t('tenants.history.endDate')}
                             />
                         </div>
@@ -176,8 +174,8 @@ export default function TenantHistoryPage() {
                                 size="sm"
                                 onClick={() => {
                                     setTypeFilter('all');
-                                    setStartDate('');
-                                    setEndDate('');
+                                    setStartDate(undefined);
+                                    setEndDate(undefined);
                                     setCurrentPage(1);
                                 }}
                             >
