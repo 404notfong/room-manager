@@ -357,6 +357,7 @@
         "address": "Address",
         "occupation": "Occupation",
         "contact": "Contact",
+        "personalInfo": "Personal Info",
         "emergencyContact": "Emergency Contact",
         "ecName": "Name",
         "ecPhone": "Phone",
