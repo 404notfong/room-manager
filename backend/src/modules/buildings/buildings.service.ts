@@ -1,12 +1,12 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { escapeRegExp, normalizeString } from '@common/utils/string.util';
+import { BuildingQueryDto } from '@modules/buildings/dto/building-query.dto';
+import { CreateBuildingDto, UpdateBuildingDto } from '@modules/buildings/dto/building.dto';
+import { Building, BuildingDocument } from '@modules/buildings/schemas/building.schema';
+import { RoomGroup, RoomGroupDocument } from '@modules/room-groups/schemas/room-group.schema';
+import { Room, RoomDocument } from '@modules/rooms/schemas/room.schema';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Building, BuildingDocument } from '@modules/buildings/schemas/building.schema';
-import { Room, RoomDocument } from '@modules/rooms/schemas/room.schema';
-import { RoomGroup, RoomGroupDocument } from '@modules/room-groups/schemas/room-group.schema';
-import { CreateBuildingDto, UpdateBuildingDto } from '@modules/buildings/dto/building.dto';
-import { BuildingQueryDto } from '@modules/buildings/dto/building-query.dto';
-import { normalizeString, escapeRegExp } from '@common/utils/string.util';
 
 @Injectable()
 export class BuildingsService {
@@ -104,16 +104,22 @@ export class BuildingsService {
     }
 
     async syncRoomCounts(ownerId: string): Promise<{ updated: number }> {
+        // M1 Fix: Use single aggregation instead of N+1 queries
+        const roomCounts = await this.roomModel.aggregate([
+            { $match: { ownerId: new Types.ObjectId(ownerId), isDeleted: false } },
+            { $group: { _id: '$buildingId', count: { $sum: 1 } } }
+        ]).exec();
+
+        const countMap = new Map<string, number>();
+        for (const rc of roomCounts) {
+            countMap.set(rc._id.toString(), rc.count);
+        }
+
         const buildings = await this.buildingModel.find({ ownerId, isDeleted: false }).exec();
         let updatedCount = 0;
 
         for (const building of buildings) {
-            const count = await this.roomModel.countDocuments({
-                buildingId: building._id,
-                ownerId: new Types.ObjectId(ownerId),
-                isDeleted: false
-            });
-
+            const count = countMap.get(building._id.toString()) || 0;
             if (building.totalRooms !== count) {
                 building.totalRooms = count;
                 await building.save();
@@ -168,18 +174,18 @@ export class BuildingsService {
             throw new NotFoundException('Building not found');
         }
 
-        // Check if building has any OCCUPIED rooms
-        const occupiedRoomsCount = await this.roomModel
+        // H3 Fix: Check if building has any OCCUPIED or DEPOSITED rooms (rooms with active contracts)
+        const activeRoomsCount = await this.roomModel
             .countDocuments({
                 buildingId: new Types.ObjectId(id),
                 ownerId: new Types.ObjectId(ownerId),
-                status: 'OCCUPIED',
+                status: { $in: ['OCCUPIED', 'DEPOSITED'] },
                 isDeleted: false
             })
             .exec();
 
-        if (occupiedRoomsCount > 0) {
-            throw new BadRequestException('Cannot delete building with occupied rooms');
+        if (activeRoomsCount > 0) {
+            throw new BadRequestException('Cannot delete building with occupied or deposited rooms. Terminate contracts first.');
         }
 
         // Cascade delete: soft delete all rooms in this building

@@ -76,15 +76,75 @@ export class PaymentsService {
         return payment;
     }
 
-    async findAll(ownerId: string): Promise<Payment[]> {
-        return this.paymentModel.find({ ownerId: new Types.ObjectId(ownerId), isDeleted: false })
-            .populate('contractId tenantId')
-            .populate({
-                path: 'invoiceId',
-                populate: { path: 'roomId', populate: { path: 'buildingId' } }
-            })
-            .sort({ paymentDate: -1 })
-            .exec();
+    async findAll(ownerId: string, query?: { page?: number; limit?: number; search?: string; buildingId?: string }) {
+        const { page = 1, limit = 10, search, buildingId } = query || {};
+        const pageNum = Number(page) || 1;
+        const limitNum = Number(limit) || 10;
+        const skip = (pageNum - 1) * limitNum;
+
+        const filter: any = { ownerId: new Types.ObjectId(ownerId), isDeleted: false };
+
+        const pipeline: any[] = [
+            { $match: filter },
+            // Populate invoiceId
+            { $lookup: { from: 'invoices', localField: 'invoiceId', foreignField: '_id', as: 'invoiceId' } },
+            { $unwind: { path: '$invoiceId', preserveNullAndEmptyArrays: true } },
+            // Populate invoiceId.roomId
+            { $lookup: { from: 'rooms', localField: 'invoiceId.roomId', foreignField: '_id', as: 'invoiceId.roomId' } },
+            { $unwind: { path: '$invoiceId.roomId', preserveNullAndEmptyArrays: true } },
+            // Populate invoiceId.roomId.buildingId
+            { $lookup: { from: 'buildings', localField: 'invoiceId.roomId.buildingId', foreignField: '_id', as: 'invoiceId.roomId.buildingId' } },
+            { $unwind: { path: '$invoiceId.roomId.buildingId', preserveNullAndEmptyArrays: true } },
+            // Populate contractId
+            { $lookup: { from: 'contracts', localField: 'contractId', foreignField: '_id', as: 'contractId' } },
+            { $unwind: { path: '$contractId', preserveNullAndEmptyArrays: true } },
+            // Populate tenantId
+            { $lookup: { from: 'tenants', localField: 'tenantId', foreignField: '_id', as: 'tenantId' } },
+            { $unwind: { path: '$tenantId', preserveNullAndEmptyArrays: true } },
+            // Add invoice field for backward compat (frontend uses payment.invoice.invoiceNumber)
+            { $addFields: { invoice: '$invoiceId' } },
+        ];
+
+        // Building filter
+        if (buildingId) {
+            pipeline.push({ $match: { 'invoiceId.roomId.buildingId._id': new Types.ObjectId(buildingId) } });
+        }
+
+        // Search filter
+        if (search) {
+            const searchRegex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            pipeline.push({
+                $match: {
+                    $or: [
+                        { 'invoiceId.invoiceNumber': searchRegex },
+                        { 'tenantId.fullName': searchRegex },
+                    ],
+                },
+            });
+        }
+
+        // Sort
+        pipeline.push({ $sort: { paymentDate: -1 } });
+
+        // Count total
+        const countPipeline = [...pipeline, { $count: 'total' }];
+        const countResult = await this.paymentModel.aggregate(countPipeline).exec();
+        const total = countResult[0]?.total || 0;
+
+        // Paginate
+        pipeline.push({ $skip: skip }, { $limit: limitNum });
+
+        const data = await this.paymentModel.aggregate(pipeline).exec();
+
+        return {
+            data,
+            meta: {
+                total,
+                page: pageNum,
+                limit: limitNum,
+                totalPages: Math.ceil(total / limitNum),
+            },
+        };
     }
 
     async findByInvoice(invoiceId: string, ownerId: string): Promise<Payment[]> {
@@ -108,6 +168,14 @@ export class PaymentsService {
     }
 
     async update(id: string, ownerId: string, updatePaymentDto: UpdatePaymentDto): Promise<Payment> {
+        // Get the old payment to calculate amount difference
+        const oldPayment = await this.paymentModel.findOne({
+            _id: new Types.ObjectId(id),
+            ownerId: new Types.ObjectId(ownerId),
+            isDeleted: false,
+        });
+        if (!oldPayment) throw new NotFoundException('Payment not found');
+
         const payment = await this.paymentModel
             .findOneAndUpdate(
                 { _id: new Types.ObjectId(id), ownerId: new Types.ObjectId(ownerId), isDeleted: false }, 
@@ -116,6 +184,39 @@ export class PaymentsService {
             )
             .exec();
         if (!payment) throw new NotFoundException('Payment not found');
+
+        // H1 Fix: Recalculate invoice amounts if payment amount changed
+        if (updatePaymentDto.amount !== undefined && updatePaymentDto.amount !== oldPayment.amount) {
+            const amountDiff = updatePaymentDto.amount - oldPayment.amount;
+            const invoice = await this.invoiceModel.findById(payment.invoiceId);
+            if (invoice) {
+                const newPaidAmount = (invoice.paidAmount || 0) + amountDiff;
+                const newRemainingAmount = invoice.totalAmount - newPaidAmount;
+
+                let newStatus = InvoiceStatus.PENDING;
+                if (newPaidAmount >= invoice.totalAmount) {
+                    newStatus = InvoiceStatus.PAID;
+                } else if (newPaidAmount > 0) {
+                    newStatus = InvoiceStatus.PARTIAL;
+                } else if (invoice.dueDate < new Date()) {
+                    newStatus = InvoiceStatus.OVERDUE;
+                }
+
+                await this.invoiceModel.updateOne(
+                    { _id: invoice._id },
+                    {
+                        $set: {
+                            paidAmount: Math.max(0, newPaidAmount),
+                            remainingAmount: newRemainingAmount,
+                            status: newStatus,
+                            ...(newStatus === InvoiceStatus.PAID ? { paidDate: new Date() } : {}),
+                        },
+                    },
+                );
+                this.logger.log(`Payment ${id} updated. Invoice ${invoice._id}: paidAmount adjusted by ${amountDiff}`);
+            }
+        }
+
         return payment;
     }
 

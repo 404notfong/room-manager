@@ -72,12 +72,10 @@ export function DatePicker({ value, onChange, className, placeholder, disabled, 
     };
 
     const handleCalendarSelect = (date: Date | undefined) => {
+        // Ignore deselection (clicking the already-selected date returns undefined)
+        if (!date) return;
         onChange(date);
-        if (date) {
-            setInputValue(format(date, "dd-MM-yyyy"));
-        } else {
-            setInputValue("");
-        }
+        setInputValue(format(date, "dd-MM-yyyy"));
     };
 
     const handleBlur = () => {

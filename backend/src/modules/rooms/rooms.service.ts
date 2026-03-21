@@ -213,10 +213,7 @@ export class RoomsService {
             delete dto.buildingId;
         }
 
-        // Prevent changing status of OCCUPIED rooms
-        if (existingRoom.status === 'OCCUPIED' && dto.status && dto.status !== 'OCCUPIED') {
-            throw new BadRequestException('Cannot change status of occupied room');
-        }
+        // M3 Fix: Removed duplicate OCCUPIED status check (already covered above)
 
         // Convert roomGroupId to ObjectId if present
         if (dto.roomGroupId) {

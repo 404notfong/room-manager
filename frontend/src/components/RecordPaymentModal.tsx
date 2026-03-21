@@ -1,7 +1,9 @@
 import apiClient from '@/api/client';
 import { Button } from '@/components/ui/button';
+import { DateTimePicker } from '@/components/ui/datetime-picker';
 import {
     Dialog,
+    DialogBody,
     DialogContent,
     DialogFooter,
     DialogHeader,
@@ -21,9 +23,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/lib/utils';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { format } from 'date-fns';
 import { CreditCard, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface RecordPaymentModalProps {
@@ -40,6 +41,18 @@ const PAYMENT_METHODS = [
     { value: 'OTHER', label: 'Other' },
 ];
 
+// Format number with thousand separators (e.g., 1,000,000)
+function formatNumberInput(value: string): string {
+    const num = value.replace(/[^0-9]/g, '');
+    if (!num) return '';
+    return Number(num).toLocaleString('en-US');
+}
+
+// Parse formatted string back to number
+function parseFormattedNumber(value: string): number {
+    return Number(value.replace(/[^0-9]/g, '')) || 0;
+}
+
 export default function RecordPaymentModal({
     open,
     onOpenChange,
@@ -52,13 +65,24 @@ export default function RecordPaymentModal({
     const remainingAmount = invoice?.remainingAmount || 
         ((invoice?.totalAmount || 0) - (invoice?.paidAmount || 0));
 
-    const [amount, setAmount] = useState<string>(remainingAmount.toString());
+    const [amount, setAmount] = useState<string>(formatNumberInput(remainingAmount.toString()));
     const [paymentMethod, setPaymentMethod] = useState<string>('CASH');
-    const [paymentDate, setPaymentDate] = useState<string>(
-        format(new Date(), "yyyy-MM-dd'T'HH:mm")
-    );
+    const [paymentDate, setPaymentDate] = useState<Date>(new Date());
     const [transactionId, setTransactionId] = useState<string>('');
     const [notes, setNotes] = useState<string>('');
+
+    // Reset form when modal opens with new invoice
+    useEffect(() => {
+        if (open && invoice) {
+            const remaining = invoice?.remainingAmount || 
+                ((invoice?.totalAmount || 0) - (invoice?.paidAmount || 0));
+            setAmount(formatNumberInput(remaining.toString()));
+            setPaymentMethod('CASH');
+            setPaymentDate(new Date());
+            setTransactionId('');
+            setNotes('');
+        }
+    }, [open, invoice]);
 
     const createPaymentMutation = useMutation({
         mutationFn: async (data: any) => {
@@ -74,8 +98,6 @@ export default function RecordPaymentModal({
             queryClient.invalidateQueries({ queryKey: ['payments'] });
             onSuccess?.();
             onOpenChange(false);
-            // Reset form
-            resetForm();
         },
         onError: (error: any) => {
             toast({
@@ -86,22 +108,19 @@ export default function RecordPaymentModal({
         },
     });
 
-    const resetForm = () => {
-        setAmount(remainingAmount.toString());
-        setPaymentMethod('CASH');
-        setPaymentDate(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
-        setTransactionId('');
-        setNotes('');
+    const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const formatted = formatNumberInput(e.target.value);
+        setAmount(formatted);
     };
 
     const handleSubmit = () => {
         if (!invoice) return;
 
-        const numAmount = parseFloat(amount);
+        const numAmount = parseFormattedNumber(amount);
         if (isNaN(numAmount) || numAmount <= 0) {
             toast({
                 title: t('common.error'),
-                description: 'Please enter a valid amount',
+                description: t('payments.invalidAmount'),
                 variant: 'destructive',
             });
             return;
@@ -110,7 +129,7 @@ export default function RecordPaymentModal({
         if (numAmount > remainingAmount) {
             toast({
                 title: t('common.error'),
-                description: `Amount cannot exceed remaining amount (${formatCurrency(remainingAmount)})`,
+                description: t('payments.amountExceedsRemaining', { amount: formatCurrency(remainingAmount) }),
                 variant: 'destructive',
             });
             return;
@@ -122,7 +141,7 @@ export default function RecordPaymentModal({
             tenantId: invoice.tenantId?._id || invoice.tenantId,
             amount: numAmount,
             paymentMethod,
-            paymentDate: new Date(paymentDate),
+            paymentDate,
             transactionId: transactionId || undefined,
             notes: notes || undefined,
         };
@@ -131,7 +150,7 @@ export default function RecordPaymentModal({
     };
 
     const handlePayFullAmount = () => {
-        setAmount(remainingAmount.toString());
+        setAmount(formatNumberInput(remainingAmount.toString()));
     };
 
     if (!invoice) return null;
@@ -146,9 +165,10 @@ export default function RecordPaymentModal({
                     </DialogTitle>
                 </DialogHeader>
 
-                <div className="space-y-6">
+                <DialogBody>
+                <div className="space-y-4">
                     {/* Invoice Summary */}
-                    <div className="bg-slate-50 rounded-lg p-4 space-y-2">
+                    <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4 space-y-2">
                         <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">{t('invoices.invoiceNumber')}</span>
                             <span className="font-medium">{invoice.invoiceNumber}</span>
@@ -172,35 +192,35 @@ export default function RecordPaymentModal({
 
                     {/* Amount Input */}
                     <div className="space-y-2">
-                        <Label htmlFor="amount">{t('payments.amount')} *</Label>
+                        <Label htmlFor="amount">{t('payments.amount')} <span className="text-destructive">*</span></Label>
                         <div className="flex gap-2">
-                            <Input
-                                id="amount"
-                                type="number"
-                                value={amount}
-                                onChange={(e) => setAmount(e.target.value)}
-                                placeholder="0"
-                                min={0}
-                                max={remainingAmount}
-                            />
+                            <div className="relative flex-1">
+                                <Input
+                                    id="amount"
+                                    value={amount}
+                                    onChange={handleAmountChange}
+                                    placeholder="0"
+                                    className="pr-10"
+                                />
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">đ</span>
+                            </div>
                             <Button
                                 type="button"
                                 variant="outline"
-                                size="sm"
                                 onClick={handlePayFullAmount}
                                 className="whitespace-nowrap"
                             >
-                                Pay Full
+                                {t('payments.payFull')}
                             </Button>
                         </div>
                     </div>
 
                     {/* Payment Method */}
                     <div className="space-y-2">
-                        <Label htmlFor="paymentMethod">{t('payments.method')} *</Label>
+                        <Label htmlFor="paymentMethod">{t('payments.method')} <span className="text-destructive">*</span></Label>
                         <Select value={paymentMethod} onValueChange={setPaymentMethod}>
                             <SelectTrigger>
-                                <SelectValue placeholder="Select method" />
+                                <SelectValue placeholder={t('payments.selectMethod')} />
                             </SelectTrigger>
                             <SelectContent>
                                 {PAYMENT_METHODS.map((method) => (
@@ -214,23 +234,22 @@ export default function RecordPaymentModal({
 
                     {/* Payment Date */}
                     <div className="space-y-2">
-                        <Label htmlFor="paymentDate">{t('payments.date')} *</Label>
-                        <Input
-                            id="paymentDate"
-                            type="datetime-local"
+                        <Label>{t('payments.date')} <span className="text-destructive">*</span></Label>
+                        <DateTimePicker
                             value={paymentDate}
-                            onChange={(e) => setPaymentDate(e.target.value)}
+                            onChange={(date) => { if (date) setPaymentDate(date); }}
+                            placeholder={t('payments.date')}
                         />
                     </div>
 
                     {/* Transaction ID (optional) */}
                     <div className="space-y-2">
-                        <Label htmlFor="transactionId">Transaction ID</Label>
+                        <Label htmlFor="transactionId">{t('payments.transactionId')}</Label>
                         <Input
                             id="transactionId"
                             value={transactionId}
                             onChange={(e) => setTransactionId(e.target.value)}
-                            placeholder="Optional"
+                            placeholder={t('common.optional')}
                         />
                     </div>
 
@@ -241,20 +260,20 @@ export default function RecordPaymentModal({
                             id="notes"
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
-                            placeholder="Optional notes..."
+                            placeholder={t('common.optional')}
                             rows={2}
                         />
                     </div>
                 </div>
+                </DialogBody>
 
-                <DialogFooter className="gap-2">
+                <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
                         {t('common.cancel')}
                     </Button>
                     <Button
                         onClick={handleSubmit}
                         disabled={createPaymentMutation.isPending}
-                        className="bg-emerald-600 hover:bg-emerald-700"
                     >
                         {createPaymentMutation.isPending ? (
                             <>

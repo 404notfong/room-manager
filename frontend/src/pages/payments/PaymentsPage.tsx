@@ -1,19 +1,9 @@
-import { useState, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, CreditCard, Search, MoreHorizontal, Wallet, Banknote, Smartphone } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import apiClient from '@/api/client';
+import { ColumnVisibilityToggle } from '@/components/ColumnVisibilityToggle';
+import Pagination from '@/components/Pagination';
 import { Badge } from '@/components/ui/badge';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Dialog,
     DialogContent,
@@ -22,21 +12,28 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
 import { toast } from '@/hooks/use-toast';
-import apiClient from '@/api/client';
-import Pagination from '@/components/Pagination';
+import { ColumnConfig, useColumnVisibility } from '@/hooks/useColumnVisibility';
+import { useDebounce } from '@/hooks/useDebounce';
 import { useBuildingStore } from '@/stores/buildingStore';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Banknote, CreditCard, Search, Smartphone, Trash2, Wallet } from 'lucide-react';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface Payment {
     _id: string;
     invoice: { _id: string; invoiceNumber: string };
-    invoiceId?: { _id: string; roomId?: { _id: string; buildingId?: { _id: string } } };
+    invoiceId?: { _id: string; invoiceNumber?: string; roomId?: { _id: string; buildingId?: { _id: string } } };
     amount: number;
     paymentMethod: 'cash' | 'bank_transfer' | 'momo' | 'other';
     paymentDate: string;
@@ -45,8 +42,8 @@ interface Payment {
 }
 
 const paymentsApi = {
-    getAll: async (): Promise<Payment[]> => {
-        const response = await apiClient.get('/payments');
+    getAll: async (params: { page: number; limit: number; search?: string; buildingId?: string }) => {
+        const response = await apiClient.get('/payments', { params });
         return response.data;
     },
     delete: async (id: string) => {
@@ -60,15 +57,29 @@ export default function PaymentsPage() {
     const queryClient = useQueryClient();
     const { selectedBuildingId } = useBuildingStore();
     const [searchTerm, setSearchTerm] = useState('');
+    const debouncedSearchTerm = useDebounce(searchTerm, 500);
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
     const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
 
-    const { data: payments = [], isLoading } = useQuery({
-        queryKey: ['payments'],
-        queryFn: paymentsApi.getAll,
+    // Column visibility configuration
+    const columnConfig: ColumnConfig[] = [
+        { id: 'invoice', label: t('payments.invoice') },
+        { id: 'amount', label: t('payments.amount') },
+        { id: 'method', label: t('payments.method') },
+        { id: 'date', label: t('payments.date') },
+        { id: 'notes', label: t('payments.notes') },
+    ];
+    const columnVisibility = useColumnVisibility('payments', columnConfig);
+
+    const { data, isPending } = useQuery({
+        queryKey: ['payments', { page: currentPage, limit: pageSize, search: debouncedSearchTerm, buildingId: selectedBuildingId || undefined }],
+        queryFn: () => paymentsApi.getAll({ page: currentPage, limit: pageSize, search: debouncedSearchTerm, buildingId: selectedBuildingId || undefined }),
     });
+
+    const payments: Payment[] = Array.isArray(data?.data) ? data.data : [];
+    const meta = data?.meta || { total: 0, totalPages: 1 };
 
     const deleteMutation = useMutation({
         mutationFn: paymentsApi.delete,
@@ -119,26 +130,7 @@ export default function PaymentsPage() {
         return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
     };
 
-    // Filter by selected building first, then by search
-    const buildingFilteredPayments = selectedBuildingId
-        ? payments.filter(payment => payment.invoiceId?.roomId?.buildingId?._id === selectedBuildingId)
-        : payments;
-
-    const filteredPayments = buildingFilteredPayments.filter(
-        (payment) =>
-            payment.invoice?.invoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    // Calculate total
-    const totalAmount = filteredPayments.reduce((sum, p) => sum + p.amount, 0);
-
-    // Pagination
-    const totalPages = Math.ceil(filteredPayments.length / pageSize);
-    const paginatedPayments = useMemo(() => {
-        const start = (currentPage - 1) * pageSize;
-        return filteredPayments.slice(start, start + pageSize);
-    }, [filteredPayments, currentPage, pageSize]);
-
+    // Reset to page 1 when search changes
     const handleSearchChange = (value: string) => {
         setSearchTerm(value);
         setCurrentPage(1);
@@ -152,24 +144,7 @@ export default function PaymentsPage() {
                     <h1 className="text-3xl font-bold tracking-tight">{t('payments.title')}</h1>
                     <p className="text-muted-foreground">{t('payments.subtitle')}</p>
                 </div>
-                <Button>
-                    <Plus className="mr-2 h-4 w-4" />
-                    {t('payments.record')}
-                </Button>
             </div>
-
-            {/* Summary Card */}
-            <Card>
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">{t('payments.totalReceived')}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold text-green-600">{formatCurrency(totalAmount)}</div>
-                    <p className="text-xs text-muted-foreground">
-                        {t('payments.transactionCount', { count: filteredPayments.length })}
-                    </p>
-                </CardContent>
-            </Card>
 
             {/* Search */}
             <div className="flex items-center gap-2">
@@ -186,72 +161,77 @@ export default function PaymentsPage() {
 
             {/* Table */}
             <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <CreditCard className="h-5 w-5" />
-                        {t('payments.list')}
-                    </CardTitle>
-                    <CardDescription>
-                        {t('payments.totalCount', { count: filteredPayments.length })}
-                    </CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                    <div>
+                        <CardTitle className="flex items-center gap-2">
+                            <CreditCard className="h-5 w-5" />
+                            {t('payments.list')}
+                        </CardTitle>
+                        <CardDescription>
+                            {t('payments.totalCount', { count: meta.total })}
+                        </CardDescription>
+                    </div>
+                    <ColumnVisibilityToggle {...columnVisibility} />
                 </CardHeader>
                 <CardContent>
-                    {isLoading ? (
+                    {isPending ? (
                         <div className="text-center py-8 text-muted-foreground">{t('common.loading')}</div>
-                    ) : filteredPayments.length === 0 ? (
+                    ) : payments.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">{t('payments.noData')}</div>
                     ) : (
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>{t('payments.invoice')}</TableHead>
-                                    <TableHead className="text-right">{t('payments.amount')}</TableHead>
-                                    <TableHead>{t('payments.method')}</TableHead>
-                                    <TableHead>{t('payments.date')}</TableHead>
-                                    <TableHead>{t('payments.notes')}</TableHead>
+                                    {columnVisibility.isVisible('invoice') && <TableHead>{t('payments.invoice')}</TableHead>}
+                                    {columnVisibility.isVisible('amount') && <TableHead className="text-right">{t('payments.amount')}</TableHead>}
+                                    {columnVisibility.isVisible('method') && <TableHead>{t('payments.method')}</TableHead>}
+                                    {columnVisibility.isVisible('date') && <TableHead>{t('payments.date')}</TableHead>}
+                                    {columnVisibility.isVisible('notes') && <TableHead>{t('payments.notes')}</TableHead>}
                                     <TableHead className="w-[70px]"></TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {paginatedPayments.map((payment) => (
+                                {payments.map((payment) => (
                                     <TableRow key={payment._id}>
-                                        <TableCell className="font-medium">
-                                            {payment.invoice?.invoiceNumber || '-'}
-                                        </TableCell>
-                                        <TableCell className="text-right font-medium text-green-600">
-                                            {formatCurrency(payment.amount)}
-                                        </TableCell>
-                                        <TableCell>{getMethodBadge(payment.paymentMethod)}</TableCell>
-                                        <TableCell>{formatDate(payment.paymentDate)}</TableCell>
-                                        <TableCell className="max-w-[200px] truncate">
-                                            {payment.notes || '-'}
-                                        </TableCell>
+                                        {columnVisibility.isVisible('invoice') && (
+                                            <TableCell className="font-medium">
+                                                {payment.invoice?.invoiceNumber || payment.invoiceId?.invoiceNumber || '-'}
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('amount') && (
+                                            <TableCell className="text-right font-medium text-green-600">
+                                                {formatCurrency(payment.amount)}
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('method') && (
+                                            <TableCell>{getMethodBadge(payment.paymentMethod)}</TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('date') && (
+                                            <TableCell>{formatDate(payment.paymentDate)}</TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('notes') && (
+                                            <TableCell className="max-w-[200px] truncate">
+                                                {payment.notes || '-'}
+                                            </TableCell>
+                                        )}
                                         <TableCell>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon">
-                                                        <MoreHorizontal className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={() => handleDelete(payment)} className="text-destructive">
-                                                        <Trash2 className="mr-2 h-4 w-4" />
-                                                        {t('common.delete')}
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
+                                            <div className="flex items-center gap-1">
+                                                <Button variant="ghost" size="icon" onClick={() => handleDelete(payment)} className="text-destructive hover:text-destructive">
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
                         </Table>
                     )}
-                    {filteredPayments.length > 0 && (
+                    {meta.total > 0 && (
                         <Pagination
                             currentPage={currentPage}
-                            totalPages={totalPages}
+                            totalPages={meta.totalPages}
                             pageSize={pageSize}
-                            totalItems={filteredPayments.length}
+                            totalItems={meta.total}
                             onPageChange={setCurrentPage}
                             onPageSizeChange={(size) => {
                                 setPageSize(size);

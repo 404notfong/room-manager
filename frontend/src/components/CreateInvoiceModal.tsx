@@ -629,7 +629,6 @@ export default function CreateInvoiceModal({
                         type="submit"
                         form="create-invoice-form"
                         disabled={createMutation.isPending}
-                        className="bg-emerald-600 hover:bg-emerald-700"
                     >
                         {createMutation.isPending ? (
                             <>

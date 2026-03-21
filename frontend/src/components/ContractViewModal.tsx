@@ -555,6 +555,7 @@ export default function ContractViewModal({ open, onOpenChange, contract }: Cont
                 room={contract.roomId}
                 onSuccess={() => {
                     setIsCreateShortTermInvoiceOpen(false);
+                    onOpenChange(false);
                 }}
             />
 

@@ -3,6 +3,7 @@ import { InvoicesController } from '@modules/invoices/invoices.controller';
 import { InvoicesService } from '@modules/invoices/invoices.service';
 import { Invoice, InvoiceSchema } from '@modules/invoices/schemas/invoice.schema';
 import { Room, RoomSchema } from '@modules/rooms/schemas/room.schema';
+import { Tenant, TenantSchema } from '@modules/tenants/schemas/tenant.schema';
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
@@ -12,6 +13,7 @@ import { MongooseModule } from '@nestjs/mongoose';
             { name: Invoice.name, schema: InvoiceSchema },
             { name: Contract.name, schema: ContractSchema },
             { name: Room.name, schema: RoomSchema },
+            { name: Tenant.name, schema: TenantSchema },
         ])
     ],
     controllers: [InvoicesController],

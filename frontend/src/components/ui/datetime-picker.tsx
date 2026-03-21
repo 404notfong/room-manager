@@ -104,18 +104,18 @@ export function DateTimePicker({
     };
 
     const handleCalendarSelect = (date: Date | undefined) => {
-        if (date && showTime) {
+        // Ignore deselection (clicking already-selected date returns undefined)
+        if (!date) return;
+        
+        if (showTime) {
             // Preserve current time when selecting new date
             const hours = currentDate?.getHours() || 0;
             const minutes = currentDate?.getMinutes() || 0;
             const newDate = set(date, { hours, minutes });
             onChange(newDate);
-        } else if (date) {
+        } else {
             onChange(date);
             setIsOpen(false);
-        } else {
-            onChange(undefined);
-            setInputValue("");
         }
     };
 

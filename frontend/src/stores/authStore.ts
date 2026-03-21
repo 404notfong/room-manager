@@ -21,13 +21,13 @@ export const useAuthStore = create<AuthState>()(
             user: null,
             token: null,
             setAuth: (user, token) => {
+                // M7 Fix: Only store token in localStorage for API interceptor
+                // User data is managed by Zustand persist ('auth-storage' key)
                 localStorage.setItem('token', token);
-                localStorage.setItem('user', JSON.stringify(user));
                 set({ user, token });
             },
             logout: () => {
                 localStorage.removeItem('token');
-                localStorage.removeItem('user');
                 set({ user: null, token: null });
             },
         }),

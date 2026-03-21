@@ -1,4 +1,5 @@
 import apiClient from '@/api/client';
+import { ColumnVisibilityToggle } from '@/components/ColumnVisibilityToggle';
 import ContractSelectModal from '@/components/ContractSelectModal';
 import CreateInvoiceModal from '@/components/CreateInvoiceModal';
 import CreateShortTermInvoiceModal from '@/components/CreateShortTermInvoiceModal';
@@ -16,14 +17,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { TableSkeleton } from '@/components/ui/skeletons/TableSkeleton';
 import {
     Table,
     TableBody,
@@ -33,10 +27,12 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { toast } from '@/hooks/use-toast';
+import { ColumnConfig, useColumnVisibility } from '@/hooks/useColumnVisibility';
+import { useDebounce } from '@/hooks/useDebounce';
 import { useBuildingStore } from '@/stores/buildingStore';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Eye, MoreHorizontal, Pencil, Plus, Receipt, Search, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { AlertCircle, CreditCard, Eye, Plus, Receipt, Search, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface Invoice {
@@ -53,13 +49,13 @@ interface Invoice {
     paidAmount: number;
     remainingAmount: number;
     dueDate: string;
-    status: 'pending' | 'paid' | 'overdue' | 'cancelled';
+    status: 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERDUE' | 'CANCELLED';
     createdAt: string;
 }
 
 const invoicesApi = {
-    getAll: async (): Promise<Invoice[]> => {
-        const response = await apiClient.get('/invoices');
+    getAll: async (params: { page: number; limit: number; search?: string; buildingId?: string }) => {
+        const response = await apiClient.get('/invoices', { params });
         return response.data;
     },
     delete: async (id: string) => {
@@ -73,6 +69,7 @@ export default function InvoicesPage() {
     const queryClient = useQueryClient();
     const { selectedBuildingId } = useBuildingStore();
     const [searchTerm, setSearchTerm] = useState('');
+    const debouncedSearchTerm = useDebounce(searchTerm, 500);
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
     const [isViewOpen, setIsViewOpen] = useState(false);
     const [isPaymentOpen, setIsPaymentOpen] = useState(false);
@@ -86,10 +83,27 @@ export default function InvoicesPage() {
     const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
     const [isCreateShortTermInvoiceOpen, setIsCreateShortTermInvoiceOpen] = useState(false);
 
-    const { data: invoices = [], isLoading } = useQuery({
-        queryKey: ['invoices'],
-        queryFn: invoicesApi.getAll,
+    // Column visibility configuration
+    const columnConfig: ColumnConfig[] = [
+        { id: 'invoiceNumber', label: t('invoices.invoiceNumber') },
+        { id: 'tenant', label: t('invoices.tenant') },
+        { id: 'room', label: t('invoices.room') },
+        { id: 'period', label: t('invoices.period') },
+        { id: 'totalAmount', label: t('invoices.totalAmount') },
+        { id: 'paidAmount', label: t('invoices.paidAmount') },
+        { id: 'remainingAmount', label: t('invoices.remainingAmount') },
+        { id: 'dueDate', label: t('invoices.dueDate') },
+        { id: 'status', label: t('common.status') },
+    ];
+    const columnVisibility = useColumnVisibility('invoices', columnConfig);
+
+    const { data, isPending } = useQuery({
+        queryKey: ['invoices', { page: currentPage, limit: pageSize, search: debouncedSearchTerm, buildingId: selectedBuildingId || undefined }],
+        queryFn: () => invoicesApi.getAll({ page: currentPage, limit: pageSize, search: debouncedSearchTerm, buildingId: selectedBuildingId || undefined }),
     });
+
+    const invoices: Invoice[] = Array.isArray(data?.data) ? data.data : [];
+    const meta = data?.meta || { total: 0, totalPages: 1 };
 
     const deleteMutation = useMutation({
         mutationFn: invoicesApi.delete,
@@ -121,14 +135,16 @@ export default function InvoicesPage() {
 
     const getStatusBadge = (status: string) => {
         switch (status) {
-            case 'paid':
-                return <Badge className="bg-green-500 text-[#F8FAFC] hover:bg-green-600">{t('invoices.statusPaid')}</Badge>;
-            case 'pending':
-                return <Badge className="bg-yellow-500 text-[#F8FAFC] hover:bg-yellow-600">{t('invoices.statusPending')}</Badge>;
-            case 'overdue':
-                return <Badge variant="destructive">{t('invoices.statusOverdue')}</Badge>;
-            case 'cancelled':
-                return <Badge variant="secondary">{t('invoices.statusCancelled')}</Badge>;
+            case 'PAID':
+                return <Badge className="bg-green-500 text-white border-0">{t('invoices.statusPaid')}</Badge>;
+            case 'PENDING':
+                return <Badge className="bg-yellow-500 text-white border-0">{t('invoices.statusPending')}</Badge>;
+            case 'OVERDUE':
+                return <Badge className="bg-red-500 text-white border-0">{t('invoices.statusOverdue')}</Badge>;
+            case 'CANCELLED':
+                return <Badge className="bg-gray-500 text-white border-0">{t('invoices.statusCancelled')}</Badge>;
+            case 'PARTIAL':
+                return <Badge className="bg-blue-500 text-white border-0">{t('invoices.statusPartial')}</Badge>;
             default:
                 return <Badge variant="outline">{status}</Badge>;
         }
@@ -144,33 +160,10 @@ export default function InvoicesPage() {
     };
 
     const isOverdue = (dueDate: string, status: string) => {
-        return status === 'pending' && new Date(dueDate) < new Date();
+        return status === 'PENDING' && new Date(dueDate) < new Date();
     };
 
-    // Filter by selected building first, then by search
-    const buildingFilteredInvoices = selectedBuildingId
-        ? invoices.filter(invoice => {
-            const buildingId = typeof invoice.roomId?.buildingId === 'object'
-                ? (invoice.roomId.buildingId as any)?._id
-                : invoice.roomId?.buildingId;
-            return buildingId === selectedBuildingId;
-        })
-        : invoices;
-
-    const filteredInvoices = buildingFilteredInvoices.filter(
-        (invoice) =>
-            invoice.invoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            invoice.tenantId?.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            invoice.roomId?.roomCode?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    // Pagination
-    const totalPages = Math.ceil(filteredInvoices.length / pageSize);
-    const paginatedInvoices = useMemo(() => {
-        const start = (currentPage - 1) * pageSize;
-        return filteredInvoices.slice(start, start + pageSize);
-    }, [filteredInvoices, currentPage, pageSize]);
-
+    // Reset to page 1 when search changes
     const handleSearchChange = (value: string) => {
         setSearchTerm(value);
         setCurrentPage(1);
@@ -205,113 +198,130 @@ export default function InvoicesPage() {
 
             {/* Table */}
             <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Receipt className="h-5 w-5" />
-                        {t('invoices.list')}
-                    </CardTitle>
-                    <CardDescription>
-                        {t('invoices.totalCount', { count: filteredInvoices.length })}
-                    </CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                    <div>
+                        <CardTitle className="flex items-center gap-2">
+                            <Receipt className="h-5 w-5" />
+                            {t('invoices.list')}
+                        </CardTitle>
+                        <CardDescription>
+                            {t('invoices.totalCount', { count: meta.total })}
+                        </CardDescription>
+                    </div>
+                    <ColumnVisibilityToggle {...columnVisibility} />
                 </CardHeader>
                 <CardContent>
-                    {isLoading ? (
-                        <TableSkeleton columns={9} />
-                    ) : filteredInvoices.length === 0 ? (
+                    {isPending ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                            {t('common.loading')}
+                        </div>
+                    ) : invoices.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">{t('invoices.noData')}</div>
                     ) : (
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>{t('invoices.invoiceNumber')}</TableHead>
-                                    <TableHead>{t('invoices.tenant')}</TableHead>
-                                    <TableHead>{t('invoices.room')}</TableHead>
-                                    <TableHead>{t('invoices.period')}</TableHead>
-                                    <TableHead className="text-right">{t('invoices.totalAmount')}</TableHead>
-                                    <TableHead className="text-right">{t('invoices.paidAmount')}</TableHead>
-                                    <TableHead className="text-right">{t('invoices.remainingAmount')}</TableHead>
-                                    <TableHead>{t('invoices.dueDate')}</TableHead>
-                                    <TableHead className="text-center">{t('common.status')}</TableHead>
-                                    <TableHead className="w-[70px]"></TableHead>
+                                    {columnVisibility.isVisible('invoiceNumber') && <TableHead className="w-[120px]">{t('invoices.invoiceNumber')}</TableHead>}
+                                    {columnVisibility.isVisible('tenant') && <TableHead className="w-[150px]">{t('invoices.tenant')}</TableHead>}
+                                    {columnVisibility.isVisible('room') && <TableHead className="w-[100px]">{t('invoices.room')}</TableHead>}
+                                    {columnVisibility.isVisible('period') && <TableHead className="w-[100px]">{t('invoices.period')}</TableHead>}
+                                    {columnVisibility.isVisible('totalAmount') && <TableHead className="text-right w-[130px]">{t('invoices.totalAmount')}</TableHead>}
+                                    {columnVisibility.isVisible('paidAmount') && <TableHead className="text-right w-[120px]">{t('invoices.paidAmount')}</TableHead>}
+                                    {columnVisibility.isVisible('remainingAmount') && <TableHead className="text-right w-[120px]">{t('invoices.remainingAmount')}</TableHead>}
+                                    {columnVisibility.isVisible('dueDate') && <TableHead className="w-[100px]">{t('invoices.dueDate')}</TableHead>}
+                                    {columnVisibility.isVisible('status') && <TableHead className="text-center w-[100px]">{t('common.status')}</TableHead>}
+                                    <TableHead className="w-[50px]"></TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {paginatedInvoices.map((invoice) => (
-                                    <TableRow 
-                                        key={invoice._id}
-                                        className="cursor-pointer hover:bg-slate-50"
-                                        onClick={() => {
-                                            setSelectedInvoice(invoice);
-                                            setIsViewOpen(true);
-                                        }}
-                                    >
-                                        <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
-                                        <TableCell>{invoice.tenantId?.fullName || '-'}</TableCell>
-                                        <TableCell>{invoice.roomId?.roomCode || '-'}</TableCell>
-                                        <TableCell>
-                                            {invoice.billingPeriod?.month}/{invoice.billingPeriod?.year}
-                                        </TableCell>
-                                        <TableCell className="text-right font-medium">
-                                            {formatCurrency(invoice.totalAmount)}
-                                        </TableCell>
-                                        <TableCell className="text-right text-green-600">
-                                            {formatCurrency(invoice.paidAmount || 0)}
-                                        </TableCell>
-                                        <TableCell className="text-right text-orange-600 font-medium">
-                                            {formatCurrency(invoice.remainingAmount || 0)}
-                                        </TableCell>
+                                {invoices.map((invoice) => (
+                                    <TableRow key={invoice._id}>
+                                        {columnVisibility.isVisible('invoiceNumber') && (
+                                            <TableCell
+                                                className="font-mono text-xs font-medium cursor-pointer hover:text-primary hover:underline"
+                                                onClick={() => {
+                                                    setSelectedInvoice(invoice);
+                                                    setIsViewOpen(true);
+                                                }}
+                                            >
+                                                {invoice.invoiceNumber}
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('tenant') && (
+                                            <TableCell>{invoice.tenantId?.fullName || '-'}</TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('room') && (
+                                            <TableCell>{invoice.roomId?.roomCode || '-'}</TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('period') && (
+                                            <TableCell>
+                                                {invoice.billingPeriod?.month}/{invoice.billingPeriod?.year}
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('totalAmount') && (
+                                            <TableCell className="text-right font-medium">
+                                                {formatCurrency(invoice.totalAmount)}
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('paidAmount') && (
+                                            <TableCell className="text-right text-green-600">
+                                                {formatCurrency(invoice.paidAmount || 0)}
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('remainingAmount') && (
+                                            <TableCell className="text-right text-orange-600 font-medium">
+                                                {formatCurrency(invoice.remainingAmount || 0)}
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('dueDate') && (
+                                            <TableCell>
+                                                <div className="flex items-center gap-1">
+                                                    {isOverdue(invoice.dueDate, invoice.status) && (
+                                                        <AlertCircle className="h-4 w-4 text-red-500" />
+                                                    )}
+                                                    <span className={isOverdue(invoice.dueDate, invoice.status) ? 'text-red-500' : ''}>
+                                                        {formatDate(invoice.dueDate)}
+                                                    </span>
+                                                </div>
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.isVisible('status') && (
+                                            <TableCell className="text-center">{getStatusBadge(invoice.status)}</TableCell>
+                                        )}
                                         <TableCell>
                                             <div className="flex items-center gap-1">
-                                                {isOverdue(invoice.dueDate, invoice.status) && (
-                                                    <AlertCircle className="h-4 w-4 text-red-500" />
-                                                )}
-                                                <span className={isOverdue(invoice.dueDate, invoice.status) ? 'text-red-500' : ''}>
-                                                    {formatDate(invoice.dueDate)}
-                                                </span>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="text-center">{getStatusBadge(invoice.status)}</TableCell>
-                                        <TableCell>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon">
-                                                        <MoreHorizontal className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={(e) => {
-                                                        e.stopPropagation();
+                                                <Button variant="ghost" size="icon" onClick={() => {
+                                                    setSelectedInvoice(invoice);
+                                                    setIsViewOpen(true);
+                                                }} title={t('common.view')}>
+                                                    <Eye className="h-4 w-4" />
+                                                </Button>
+                                                {invoice.status !== 'PAID' && invoice.status !== 'CANCELLED' && (
+                                                    <Button variant="ghost" size="icon" onClick={() => {
                                                         setSelectedInvoice(invoice);
-                                                        setIsViewOpen(true);
-                                                    }}>
-                                                        <Eye className="mr-2 h-4 w-4" />
-                                                        {t('common.view')}
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
-                                                        <Pencil className="mr-2 h-4 w-4" />
-                                                        {t('common.edit')}
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleDelete(invoice);
-                                                    }} className="text-destructive">
-                                                        <Trash2 className="mr-2 h-4 w-4" />
-                                                        {t('common.delete')}
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
+                                                        setIsPaymentOpen(true);
+                                                    }} title={t('payments.record')} className="text-emerald-600 hover:text-emerald-700">
+                                                        <CreditCard className="h-4 w-4" />
+                                                    </Button>
+                                                )}
+                                                {invoice.status !== 'PAID' && invoice.status !== 'CANCELLED' && (
+                                                    <Button variant="ghost" size="icon" onClick={() => handleDelete(invoice)} className="text-destructive hover:text-destructive">
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
                         </Table>
                     )}
-                    {filteredInvoices.length > 0 && (
+                    {meta.total > 0 && (
                         <Pagination
                             currentPage={currentPage}
-                            totalPages={totalPages}
+                            totalPages={meta.totalPages}
                             pageSize={pageSize}
-                            totalItems={filteredInvoices.length}
+                            totalItems={meta.total}
                             onPageChange={setCurrentPage}
                             onPageSizeChange={(size) => {
                                 setPageSize(size);
@@ -324,10 +334,7 @@ export default function InvoicesPage() {
 
             {/* Delete Dialog */}
             <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-                <DialogContent
-                    onPointerDownOutside={(e) => e.preventDefault()}
-                    onEscapeKeyDown={(e) => e.preventDefault()}
-                >
+                <DialogContent>
                     <DialogHeader>
                         <DialogTitle>{t('invoices.deleteTitle')}</DialogTitle>
                         <DialogDescription>

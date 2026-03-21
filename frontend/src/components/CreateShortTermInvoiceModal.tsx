@@ -1,7 +1,8 @@
-import { zodResolver } from '@hookform/resolvers/zod';
+﻿import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { addHours, differenceInDays, differenceInHours, isSameDay, startOfDay } from 'date-fns';
 import {
+    AlertTriangle,
     Clock,
     Loader2,
     Package,
@@ -9,7 +10,7 @@ import {
     Receipt,
     Trash2
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
@@ -26,7 +27,7 @@ import {
     DialogContent,
     DialogFooter,
     DialogHeader,
-    DialogTitle,
+    DialogTitle
 } from '@/components/ui/dialog';
 import {
     Form,
@@ -111,7 +112,7 @@ function calculateShortTermAmount(
             const amount = totalHours * (contract.pricePerHour || 0);
             return {
                 amount,
-                calculation: `${totalHours} ${t('invoices.hoursUnit')} × ${formatCurrency(contract.pricePerHour)}`
+                calculation: `${totalHours} ${t('invoices.hoursUnit')} x ${formatCurrency(contract.pricePerHour)}`
             };
         }
         
@@ -163,14 +164,14 @@ function calculateFromPriceTable(
                 : `${matchingTier.fromValue}-${matchingTier.toValue}`;
             return {
                 amount,
-                calculation: `${quantity} ${unit} × ${formatCurrency(matchingTier.price)} (${t('invoices.tier')} ${tierLabel})`
+                calculation: `${quantity} ${unit} x ${formatCurrency(matchingTier.price)} (${t('invoices.tier')} ${tierLabel})`
             };
         }
         const lastTier = sortedTiers[sortedTiers.length - 1];
         const amount = quantity * lastTier.price;
         return {
             amount,
-            calculation: `${quantity} ${unit} × ${formatCurrency(lastTier.price)} (${t('invoices.lastTier')})`
+            calculation: `${quantity} ${unit} x ${formatCurrency(lastTier.price)} (${t('invoices.lastTier')})`
         };
     }
 
@@ -182,13 +183,13 @@ function calculateFromPriceTable(
     for (const tier of sortedTiers) {
         if (remainingQty <= 0) break;
         
-        // toValue === -1 means unlimited — this tier absorbs all remaining quantity
+        // toValue === -1 means unlimited â€” this tier absorbs all remaining quantity
         const tierRange = tier.toValue === -1 ? remainingQty : (tier.toValue - tier.fromValue + 1);
         const qtyInTier = Math.min(remainingQty, tierRange);
         const tierAmount = qtyInTier * tier.price;
         
         totalAmount += tierAmount;
-        calculations.push(`${qtyInTier} × ${formatCurrency(tier.price)}`);
+        calculations.push(`${qtyInTier} x ${formatCurrency(tier.price)}`);
         remainingQty -= qtyInTier;
     }
 
@@ -196,7 +197,7 @@ function calculateFromPriceTable(
         const lastTier = sortedTiers[sortedTiers.length - 1];
         const extraAmount = remainingQty * lastTier.price;
         totalAmount += extraAmount;
-        calculations.push(`${remainingQty} × ${formatCurrency(lastTier.price)}`);
+        calculations.push(`${remainingQty} x ${formatCurrency(lastTier.price)}`);
     }
 
     return {
@@ -304,7 +305,7 @@ export default function CreateShortTermInvoiceModal({
 
     // Calculate duration and amount
     const calculations = useMemo(() => {
-        if (!contract) return { totalHours: 0, totalDays: 0, rentAmount: 0, calculation: '', serviceTotal: 0, adjustmentTotal: 0, total: 0 };
+        if (!contract) return { totalHours: 0, totalDays: 0, rentAmount: 0, calculation: '', serviceTotal: 0, adjustmentTotal: 0, depositAmount: 0, total: 0 };
 
         const totalHours = autoCalculate ? autoDuration.totalHours : manualHours;
         const totalDays = autoCalculate ? autoDuration.totalDays : manualDays;
@@ -321,6 +322,9 @@ export default function CreateShortTermInvoiceModal({
             return adj.isDiscount ? sum - adj.amount : sum + adj.amount;
         }, 0);
 
+        // Deposit deduction (will be auto-applied by backend)
+        const depositAmount = contract.depositAmount || 0;
+
         return {
             totalHours,
             totalDays,
@@ -328,7 +332,8 @@ export default function CreateShortTermInvoiceModal({
             calculation: result.calculation,
             serviceTotal,
             adjustmentTotal,
-            total: result.amount + serviceTotal + adjustmentTotal
+            depositAmount,
+            total: Math.max(0, result.amount + serviceTotal + adjustmentTotal - depositAmount)
         };
     }, [contract, autoDuration, autoCalculate, manualHours, manualDays, adjustments]);
 
@@ -354,6 +359,10 @@ export default function CreateShortTermInvoiceModal({
         },
     });
 
+    // Confirmation state
+    const [showConfirmation, setShowConfirmation] = useState(false);
+    const pendingPayload = useRef<any>(null);
+
     const onSubmit = (data: CreateShortTermInvoiceFormData) => {
         if (!contract) return;
 
@@ -374,8 +383,17 @@ export default function CreateShortTermInvoiceModal({
             notes: data.notes || '',
         };
 
-        createMutation.mutate(payload);
+        pendingPayload.current = payload;
+        setShowConfirmation(true);
     };
+
+    const handleConfirmCreate = useCallback(() => {
+        if (pendingPayload.current) {
+            createMutation.mutate(pendingPayload.current);
+            pendingPayload.current = null;
+        }
+        setShowConfirmation(false);
+    }, [createMutation]);
 
     // Add adjustment handler
     const handleAddAdjustment = () => {
@@ -401,6 +419,7 @@ export default function CreateShortTermInvoiceModal({
     if (!contract) return null;
 
     return (
+        <>
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-5xl">
                 <DialogHeader>
@@ -412,14 +431,14 @@ export default function CreateShortTermInvoiceModal({
 
                 <DialogBody>
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)}>
+                    <form id="create-short-term-invoice-form" onSubmit={form.handleSubmit(onSubmit)}>
                         {/* Contract Info - full width */}
                         <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-3 mb-4">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <span className="text-sm font-medium">{contract.contractCode}</span>
                                     <span className="text-sm text-muted-foreground ml-2">
-                                        {contract.tenantId?.name || contract.tenantId?.fullName || t('invoices.guest')} • {room?.name || room?.roomName || contract.roomId?.name || contract.roomId?.roomName || t('invoices.room')}
+                                        {contract.tenantId?.name || contract.tenantId?.fullName || t('invoices.guest')} {'\u2022'} {room?.name || room?.roomName || contract.roomId?.name || contract.roomId?.roomName || t('invoices.room')}
                                     </span>
                                 </div>
                                 <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700">
@@ -666,13 +685,17 @@ export default function CreateShortTermInvoiceModal({
                                                 className="h-8 text-xs"
                                             />
                                         </div>
-                                        <div className="w-24">
+                                        <div className="w-28">
                                             <Label className="text-xs">{t('invoices.amount')}</Label>
                                             <Input
-                                                type="number"
+                                                type="text"
+                                                inputMode="numeric"
                                                 placeholder="0"
-                                                value={newAdjustment.amount || ''}
-                                                onChange={(e) => setNewAdjustment({ ...newAdjustment, amount: Number(e.target.value) })}
+                                                value={newAdjustment.amount ? formatCurrency(newAdjustment.amount) : ''}
+                                                onChange={(e) => {
+                                                    const raw = e.target.value.replace(/[^0-9]/g, '');
+                                                    setNewAdjustment({ ...newAdjustment, amount: Number(raw) });
+                                                }}
                                                 className="h-8 text-xs"
                                             />
                                         </div>
@@ -736,6 +759,12 @@ export default function CreateShortTermInvoiceModal({
                                                 </span>
                                             </div>
                                         )}
+                                        {calculations.depositAmount > 0 && (
+                                            <div className="flex justify-between text-green-600 dark:text-green-400">
+                                                <span>{t('invoices.depositDeduction', 'Deposit deduction')}</span>
+                                                <span>-{formatCurrency(calculations.depositAmount)}</span>
+                                            </div>
+                                        )}
                                         <div className="border-t border-emerald-200 dark:border-emerald-800 pt-2 flex justify-between font-bold text-lg text-emerald-800 dark:text-emerald-300">
                                             <span>{t('invoices.total')}</span>
                                             <span>{formatCurrency(calculations.total)}</span>
@@ -745,371 +774,78 @@ export default function CreateShortTermInvoiceModal({
                             </div>
                         </div>
 
-                        <DialogFooter className="mt-4">
-                            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                                {t('common.cancel')}
-                            </Button>
-                            <Button 
-                                type="submit"
-                                disabled={createMutation.isPending || calculations.total <= 0}
-                                className="bg-emerald-600 hover:bg-emerald-700"
-                            >
-                                {createMutation.isPending ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        {t('common.loading')}
-                                    </>
-                                ) : (
-                                    <>
-                                        <Receipt className="mr-2 h-4 w-4" />
-                                        {t('invoices.create')}
-                                    </>
-                                )}
-                            </Button>
-                        </DialogFooter>
                     </form>
                 </Form>
                 </DialogBody>
-            </DialogContent>
-        </Dialog>
-    );
-}
 
-                        <div className="border rounded-lg p-4 space-y-4">
-                            <div className="flex items-center gap-2 mb-2">
-                                <Clock className="h-4 w-4 text-blue-500" />
-                                <h3 className="font-medium">{t('invoices.stayDuration')}</h3>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <FormField
-                                    control={form.control}
-                                    name="checkInTime"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>{t('invoices.checkIn')}</FormLabel>
-                                            <FormControl>
-                                                <DateTimePicker
-                                                    value={field.value}
-                                                    onChange={(date) => field.onChange(date)}
-                                                    placeholder={t('invoices.checkIn')}
-                                                />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-
-                                <FormField
-                                    control={form.control}
-                                    name="checkOutTime"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>{t('invoices.checkOut')}</FormLabel>
-                                            <FormControl>
-                                                <DateTimePicker
-                                                    value={field.value}
-                                                    onChange={(date) => {
-                                                        // Only accept if after check-in
-                                                        if (date && checkInValue && date <= checkInValue) return;
-                                                        field.onChange(date);
-                                                    }}
-                                                    placeholder={t('invoices.checkOut')}
-                                                    disabledDate={(date) => {
-                                                        if (!checkInValue) return false;
-                                                        if (date < startOfDay(checkInValue)) return true;
-                                                        // Disable check-in date if checkout time would be <= check-in time
-                                                        if (isSameDay(date, checkInValue)) {
-                                                            const outH = checkOutValue?.getHours() ?? 0;
-                                                            const outM = checkOutValue?.getMinutes() ?? 0;
-                                                            const inH = checkInValue.getHours();
-                                                            const inM = checkInValue.getMinutes();
-                                                            if (outH < inH || (outH === inH && outM <= inM)) return true;
-                                                        }
-                                                        return false;
-                                                    }}
-                                                    minDateTime={checkInValue}
-                                                />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            </div>
-
-                            {/* Duration Display */}
-                            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 mt-3 space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Checkbox
-                                            id="autoCalculate"
-                                            checked={autoCalculate}
-                                            onCheckedChange={(checked) => setAutoCalculate(!!checked)}
-                                        />
-                                        <Label htmlFor="autoCalculate" className="text-sm cursor-pointer">
-                                            {t('invoices.autoCalculate') || 'Tự động tính thời gian'}
-                                        </Label>
-                                    </div>
-                                    {autoCalculate && (
-                                        <span className="font-medium text-sm">
-                                            {contract?.shortTermPricingType === 'DAILY' 
-                                                ? `${calculations.totalDays} ${t('invoices.days')}`
-                                                : contract?.shortTermPricingType === 'HOURLY'
-                                                    ? `${calculations.totalHours} ${t('invoices.hours')}`
-                                                    : `${calculations.totalHours} ${t('invoices.hours')} / ${calculations.totalDays} ${t('invoices.days')}`
-                                            }
-                                        </span>
-                                    )}
-                                </div>
-
-                                {!autoCalculate && (
-                                    <div className="flex gap-4">
-                                        {(contract?.shortTermPricingType === 'HOURLY' || contract?.shortTermPricingType === 'FIXED') && (
-                                            <div className="flex-1">
-                                                <Label className="text-xs">{t('invoices.hours') || 'Giờ'}</Label>
-                                                <Input
-                                                    type="number"
-                                                    min={0}
-                                                    value={manualHours}
-                                                    onChange={(e) => setManualHours(Math.max(0, Number(e.target.value)))}
-                                                    className="mt-1"
-                                                />
-                                            </div>
-                                        )}
-                                        {(contract?.shortTermPricingType === 'DAILY' || contract?.shortTermPricingType === 'FIXED') && (
-                                            <div className="flex-1">
-                                                <Label className="text-xs">{t('invoices.days') || 'Ngày'}</Label>
-                                                <Input
-                                                    type="number"
-                                                    min={0}
-                                                    value={manualDays}
-                                                    onChange={(e) => setManualDays(Math.max(0, Number(e.target.value)))}
-                                                    className="mt-1"
-                                                />
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                <div className="flex justify-between text-sm">
-                                    <span>{t('invoices.calculation')}:</span>
-                                    <span className="text-muted-foreground text-xs">
-                                        {calculations.calculation}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Services (if any) */}
-                        {contract.serviceCharges?.length > 0 && (
-                            <div className="border rounded-lg p-4 space-y-3">
-                                <div className="flex items-center gap-2">
-                                    <Package className="h-4 w-4 text-purple-500" />
-                                    <h3 className="font-medium">{t('invoices.services')}</h3>
-                                </div>
-                                {contract.serviceCharges
-                                    .filter((s: any) => s.isRecurring !== false)
-                                    .map((service: any, index: number) => (
-                                    <div key={index} className="flex justify-between text-sm">
-                                        <div className="flex flex-col">
-                                            <span>{service.name} {service.quantity > 1 && `x${service.quantity}`}</span>
-                                            {service.quantity > 1 && (
-                                                <span className="text-xs text-muted-foreground">
-                                                    {formatCurrency(service.amount)}/{t('invoices.eachPrice')}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <span className="font-medium">{formatCurrency(service.amount * (service.quantity || 1))}</span>
-                                    </div>
-                                ))}
-                                <div className="border-t pt-2 flex justify-between font-medium">
-                                    <span>{t('invoices.subtotal')}</span>
-                                    <span>{formatCurrency(calculations.serviceTotal)}</span>
-                                </div>
-                            </div>
+                <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                        {t('common.cancel')}
+                    </Button>
+                    <Button 
+                        type="submit"
+                        form="create-short-term-invoice-form"
+                        disabled={createMutation.isPending || calculations.total <= 0}
+                    >
+                        {createMutation.isPending ? (
+                            <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                {t('common.loading')}
+                            </>
+                        ) : (
+                            <>
+                                <Receipt className="mr-2 h-4 w-4" />
+                                {t('invoices.create')}
+                            </>
                         )}
-
-                        {/* Adjustments */}
-                        <div className="border rounded-lg p-4 space-y-3">
-                            <div className="flex items-center justify-between">
-                                <h3 className="font-medium">{t('invoices.adjustments')}</h3>
-                            </div>
-                            
-                            {/* Existing adjustments */}
-                            {adjustments.map((adj, index) => (
-                                <div key={index} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 rounded p-2">
-                                    <div className="flex items-center gap-2">
-                                        <Badge variant={adj.isDiscount ? "secondary" : "outline"} className={cn(
-                                            adj.isDiscount ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                                        )}>
-                                            {adj.isDiscount ? t('invoices.discount') : t('invoices.charge')}
-                                        </Badge>
-                                        <span className="text-sm">{adj.description}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className={cn("font-medium", adj.isDiscount ? "text-green-600" : "text-red-600")}>
-                                            {adj.isDiscount ? "-" : "+"}{formatCurrency(adj.amount)}
-                                        </span>
-                                        <Button 
-                                            type="button" 
-                                            variant="ghost" 
-                                            size="sm"
-                                            onClick={() => handleRemoveAdjustment(index)}
-                                        >
-                                            <Trash2 className="h-4 w-4 text-red-500" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            ))}
-
-                            {/* Add new adjustment */}
-                            <div className="flex gap-2 items-end">
-                                <div className="flex-1">
-                                    <Label className="text-xs">{t('invoices.description')}</Label>
-                                    <Input
-                                        placeholder={t('invoices.adjustmentPlaceholder')}
-                                        value={newAdjustment.description}
-                                        onChange={(e) => setNewAdjustment({ ...newAdjustment, description: e.target.value })}
-                                    />
-                                </div>
-                                <div className="w-32">
-                                    <Label className="text-xs">{t('invoices.amount')}</Label>
-                                    <Input
-                                        type="number"
-                                        placeholder="0"
-                                        value={newAdjustment.amount || ''}
-                                        onChange={(e) => setNewAdjustment({ ...newAdjustment, amount: Number(e.target.value) })}
-                                    />
-                                </div>
-                                <div className="flex gap-1">
-                                    <Button
-                                        type="button"
-                                        variant={newAdjustment.isDiscount ? "default" : "outline"}
-                                        size="sm"
-                                        onClick={() => setNewAdjustment({ ...newAdjustment, isDiscount: true })}
-                                        className={cn(newAdjustment.isDiscount && "bg-green-600 hover:bg-green-700")}
-                                    >
-                                        -
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant={!newAdjustment.isDiscount ? "default" : "outline"}
-                                        size="sm"
-                                        onClick={() => setNewAdjustment({ ...newAdjustment, isDiscount: false })}
-                                        className={cn(!newAdjustment.isDiscount && "bg-red-600 hover:bg-red-700")}
-                                    >
-                                        +
-                                    </Button>
-                                </div>
-                                <Button 
-                                    type="button" 
-                                    variant="outline" 
-                                    size="sm"
-                                    onClick={handleAddAdjustment}
-                                    disabled={!newAdjustment.description || newAdjustment.amount <= 0}
-                                >
-                                    <Plus className="h-4 w-4" />
-                                </Button>
-                            </div>
-                        </div>
-
-                        {/* Due Date */}
-                        <FormField
-                            control={form.control}
-                            name="dueDate"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>{t('invoices.dueDate')}</FormLabel>
-                                    <FormControl>
-                                        <DatePicker
-                                            value={field.value}
-                                            onChange={(date) => field.onChange(date)}
-                                            placeholder={t('invoices.dueDate')}
-                                        />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-
-                        {/* Notes */}
-                        <FormField
-                            control={form.control}
-                            name="notes"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>{t('invoices.notes')}</FormLabel>
-                                    <FormControl>
-                                        <Textarea
-                                            placeholder={t('invoices.notesPlaceholder')}
-                                            {...field}
-                                        />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-
-                        {/* Summary */}
-                        <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4 space-y-2">
-                            <h3 className="font-semibold text-emerald-800 dark:text-emerald-300">{t('invoices.invoiceSummary')}</h3>
-                            <div className="space-y-1 text-sm">
-                                <div className="flex justify-between">
-                                    <span>{t('invoices.rental')} ({contract?.shortTermPricingType === 'DAILY'
-                                        ? `${calculations.totalDays} ${t('invoices.days')}`
-                                        : contract?.shortTermPricingType === 'HOURLY'
-                                            ? `${calculations.totalHours} ${t('invoices.hours')}`
-                                            : `${calculations.totalHours}${t('invoices.hours').charAt(0)} / ${calculations.totalDays}${t('invoices.days').charAt(0)}`
-                                    })</span>
-                                    <span>{formatCurrency(calculations.rentAmount)}</span>
-                                </div>
-                                {calculations.serviceTotal > 0 && (
-                                    <div className="flex justify-between">
-                                        <span>{t('invoices.services')}</span>
-                                        <span>{formatCurrency(calculations.serviceTotal)}</span>
-                                    </div>
-                                )}
-                                {calculations.adjustmentTotal !== 0 && (
-                                    <div className="flex justify-between">
-                                        <span>{t('invoices.adjustments')}</span>
-                                        <span className={calculations.adjustmentTotal < 0 ? "text-green-600" : "text-red-600"}>
-                                            {calculations.adjustmentTotal < 0 ? "" : "+"}{formatCurrency(calculations.adjustmentTotal)}
-                                        </span>
-                                    </div>
-                                )}
-                                <div className="border-t border-emerald-200 dark:border-emerald-800 pt-2 flex justify-between font-bold text-lg text-emerald-800 dark:text-emerald-300">
-                                    <span>{t('invoices.total')}</span>
-                                    <span>{formatCurrency(calculations.total)}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <DialogFooter>
-                            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                                {t('common.cancel')}
-                            </Button>
-                            <Button 
-                                type="submit"
-                                disabled={createMutation.isPending || calculations.total <= 0}
-                                className="bg-emerald-600 hover:bg-emerald-700"
-                            >
-                                {createMutation.isPending ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        {t('common.loading')}
-                                    </>
-                                ) : (
-                                    <>
-                                        <Receipt className="mr-2 h-4 w-4" />
-                                        {t('invoices.create')}
-                                    </>
-                                )}
-                            </Button>
-                        </DialogFooter>
-                    </form>
-                </Form>
-                </DialogBody>
+                    </Button>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
+
+            {/* Confirmation Dialog */}
+            <Dialog open={showConfirmation} onOpenChange={setShowConfirmation}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-amber-500" />
+                            {t('invoices.confirmCreateTitle')}
+                        </DialogTitle>
+                    </DialogHeader>
+                    <DialogBody>
+                    <div className="space-y-2">
+                        <p className="text-sm text-muted-foreground">{t('invoices.confirmCreateMessage')}</p>
+                        <p className="text-sm text-amber-600 dark:text-amber-400 font-medium">
+                            {t('invoices.confirmAutoTerminate')}
+                        </p>
+                        <ul className="list-disc list-inside text-sm space-y-1 text-muted-foreground">
+                            <li>{t('invoices.confirmTerminateContract')}</li>
+                            <li>{t('invoices.confirmRoomAvailable')}</li>
+                            <li>{t('invoices.confirmTenantUpdate')}</li>
+                        </ul>
+                    </div>
+                    </DialogBody>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowConfirmation(false)}>
+                            {t('common.cancel')}
+                        </Button>
+                        <Button onClick={handleConfirmCreate} disabled={createMutation.isPending}>
+                            {createMutation.isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    {t('common.loading')}
+                                </>
+                            ) : (
+                                <>
+                                    <Receipt className="mr-2 h-4 w-4" />
+                                    {t('invoices.confirmCreate')}
+                                </>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </>
     );
 }
+

@@ -48,7 +48,7 @@ apiClient.interceptors.response.use(
             if (!isAuthPage) {
                 // Only clear auth and redirect if NOT on auth pages
                 localStorage.removeItem('token');
-                localStorage.removeItem('user');
+                localStorage.removeItem('auth-storage'); // Clear Zustand persist data
                 window.location.href = '/login';
             }
         }

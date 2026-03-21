@@ -1,8 +1,9 @@
-import { ContractStatus, ContractType, InvoiceType, PriceTableType, ShortTermPricingType } from '@common/constants/enums';
+import { ContractStatus, ContractType, InvoiceType, PriceTableType, RoomStatus, ShortTermPricingType, TenantStatus } from '@common/constants/enums';
 import { Contract, ContractDocument } from '@modules/contracts/schemas/contract.schema';
 import { CreateInvoiceDto, UpdateInvoiceDto } from '@modules/invoices/dto/invoice.dto';
 import { Invoice, InvoiceDocument } from '@modules/invoices/schemas/invoice.schema';
 import { Room, RoomDocument } from '@modules/rooms/schemas/room.schema';
+import { Tenant, TenantDocument } from '@modules/tenants/schemas/tenant.schema';
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { addMonths, getDaysInMonth, setDate } from 'date-fns';
@@ -16,6 +17,7 @@ export class InvoicesService {
         @InjectModel(Invoice.name) private invoiceModel: Model<InvoiceDocument>,
         @InjectModel(Contract.name) private contractModel: Model<ContractDocument>,
         @InjectModel(Room.name) private roomModel: Model<RoomDocument>,
+        @InjectModel(Tenant.name) private tenantModel: Model<TenantDocument>,
     ) { }
 
     /**
@@ -95,13 +97,16 @@ export class InvoicesService {
         const sortedTiers = [...priceTiers].sort((a, b) => a.fromValue - b.fromValue);
 
         if (tableType === PriceTableType.FLAT) {
-            // Flat: Find the matching tier, multiply quantity by that rate
-            const matchingTier = sortedTiers.find(tier => quantity >= tier.fromValue && quantity <= tier.toValue);
+            // M8 Fix: Handle -1 sentinel in flat pricing
+            const matchingTier = sortedTiers.find(tier =>
+                quantity >= tier.fromValue && (tier.toValue === -1 || quantity <= tier.toValue)
+            );
             if (matchingTier) {
                 const amount = quantity * matchingTier.price;
+                const tierLabel = matchingTier.toValue === -1 ? `${matchingTier.fromValue}+` : `${matchingTier.fromValue}-${matchingTier.toValue}`;
                 return {
                     amount,
-                    calculation: `${quantity} ${unit} x ${matchingTier.price} (tier ${matchingTier.fromValue}-${matchingTier.toValue}) = ${amount}`
+                    calculation: `${quantity} ${unit} x ${matchingTier.price} (tier ${tierLabel}) = ${amount}`
                 };
             }
             // If quantity exceeds all tiers, use the last tier's price
@@ -121,7 +126,8 @@ export class InvoicesService {
         for (const tier of sortedTiers) {
             if (remainingQty <= 0) break;
             
-            const tierRange = tier.toValue - tier.fromValue + 1;
+            // H4 Fix: Handle -1 sentinel ("remaining" tier) correctly
+            const tierRange = tier.toValue === -1 ? remainingQty : (tier.toValue - tier.fromValue + 1);
             const qtyInTier = Math.min(remainingQty, tierRange);
             const tierAmount = qtyInTier * tier.price;
             
@@ -218,14 +224,26 @@ export class InvoicesService {
             createInvoiceDto.currentWaterIndex = currentWater;
         }
 
-        const serviceTotal = (createInvoiceDto.serviceCharges || []).reduce((sum, charge) => sum + charge.amount, 0);
+        const serviceTotal = (createInvoiceDto.serviceCharges || []).reduce((sum, charge) => sum + (charge.amount * (charge.quantity || 1)), 0);
         
         // Calculate adjustments (additional charges - discounts)
-        const adjustmentTotal = (createInvoiceDto.adjustments || []).reduce((sum, adj) => {
+        const adjustments = [...(createInvoiceDto.adjustments || [])];
+
+        // Auto-deduct deposit for short-term invoices
+        if (isShortTerm && contract.depositAmount && contract.depositAmount > 0) {
+            adjustments.push({
+                description: 'Deposit deduction',
+                amount: contract.depositAmount,
+                isDiscount: true,
+            });
+            this.logger.log(`Auto-deducting deposit: ${contract.depositAmount}`);
+        }
+
+        const adjustmentTotal = adjustments.reduce((sum, adj) => {
             return adj.isDiscount ? sum - adj.amount : sum + adj.amount;
         }, 0);
 
-        const totalAmount = rentAmount + electricityAmount + waterAmount + serviceTotal + adjustmentTotal;
+        const totalAmount = Math.max(0, rentAmount + electricityAmount + waterAmount + serviceTotal + adjustmentTotal);
 
         const invoiceNumber = `INV-${Date.now()}`;
 
@@ -246,6 +264,7 @@ export class InvoicesService {
             priceTableType: contract.priceTableType,
             pricePerHour: contract.pricePerHour,
             fixedPrice: contract.fixedPrice,
+            depositAmount: contract.depositAmount,
             // Calculation details
             ...(isShortTerm && { shortTermCalculation }),
         };
@@ -253,6 +272,7 @@ export class InvoicesService {
         // 5. Create invoice
         const invoice = new this.invoiceModel({
             ...createInvoiceDto,
+            adjustments,
             ownerId: new Types.ObjectId(ownerId),
             contractId: new Types.ObjectId(createInvoiceDto.contractId),
             roomId: new Types.ObjectId(createInvoiceDto.roomId),
@@ -311,15 +331,119 @@ export class InvoicesService {
             }
         }
 
+        // 8. For short-term contracts: auto-terminate after invoice creation
+        if (isShortTerm) {
+            // Terminate contract
+            await this.contractModel.updateOne(
+                { _id: contract._id },
+                {
+                    $set: {
+                        status: ContractStatus.TERMINATED,
+                        endDate: new Date(),
+                        terminatedAt: new Date(),
+                    }
+                }
+            ).exec();
+            this.logger.log(`Short-term contract ${contract.contractCode} auto-terminated after invoice creation`);
+
+            // Set room to AVAILABLE
+            await this.roomModel.updateOne(
+                { _id: new Types.ObjectId(createInvoiceDto.roomId) },
+                { $set: { status: RoomStatus.AVAILABLE } }
+            ).exec();
+            this.logger.log(`Room ${createInvoiceDto.roomId} set to AVAILABLE`);
+
+            // Set tenant to ACTIVE + clear currentRoomId
+            const tenantId = contract.tenantId?.toString() || createInvoiceDto.tenantId;
+            if (tenantId) {
+                await this.tenantModel.updateOne(
+                    { _id: new Types.ObjectId(tenantId) },
+                    {
+                        $set: {
+                            status: TenantStatus.ACTIVE,
+                            currentRoomId: null,
+                            moveOutDate: new Date().toISOString(),
+                        }
+                    }
+                ).exec();
+                this.logger.log(`Tenant ${tenantId} set to ACTIVE, currentRoomId cleared`);
+            }
+        }
+
         return savedInvoice;
     }
 
-    async findAll(ownerId: string): Promise<Invoice[]> {
-        return this.invoiceModel.find({ ownerId: new Types.ObjectId(ownerId), isDeleted: false })
-            .populate('contractId tenantId')
-            .populate({ path: 'roomId', populate: { path: 'buildingId' } })
-            .sort({ createdAt: -1 })
-            .exec();
+    async findAll(ownerId: string, query?: { page?: number; limit?: number; search?: string; buildingId?: string }) {
+        const { page = 1, limit = 10, search, buildingId } = query || {};
+        const pageNum = Number(page) || 1;
+        const limitNum = Number(limit) || 10;
+        const skip = (pageNum - 1) * limitNum;
+
+        const filter: any = { ownerId: new Types.ObjectId(ownerId), isDeleted: false };
+
+        // Build the aggregation pipeline for search + building filter
+        const pipeline: any[] = [
+            { $match: filter },
+            // Populate roomId
+            { $lookup: { from: 'rooms', localField: 'roomId', foreignField: '_id', as: 'roomId' } },
+            { $unwind: { path: '$roomId', preserveNullAndEmptyArrays: true } },
+            // Populate roomId.buildingId
+            { $lookup: { from: 'buildings', localField: 'roomId.buildingId', foreignField: '_id', as: 'roomId.buildingId' } },
+            { $unwind: { path: '$roomId.buildingId', preserveNullAndEmptyArrays: true } },
+            // Populate tenantId
+            { $lookup: { from: 'tenants', localField: 'tenantId', foreignField: '_id', as: 'tenantId' } },
+            { $unwind: { path: '$tenantId', preserveNullAndEmptyArrays: true } },
+            // Populate contractId
+            { $lookup: { from: 'contracts', localField: 'contractId', foreignField: '_id', as: 'contractId' } },
+            { $unwind: { path: '$contractId', preserveNullAndEmptyArrays: true } },
+        ];
+
+        // Building filter
+        if (buildingId) {
+            pipeline.push({ $match: { 'roomId.buildingId._id': new Types.ObjectId(buildingId) } });
+        }
+
+        // Search filter
+        if (search) {
+            const searchRegex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            pipeline.push({
+                $match: {
+                    $or: [
+                        { invoiceNumber: searchRegex },
+                        { 'tenantId.fullName': searchRegex },
+                        { 'roomId.roomCode': searchRegex },
+                    ],
+                },
+            });
+        }
+
+        // M2 Fix: Use $facet to run count + data in a single pipeline
+        pipeline.push({
+            $facet: {
+                data: [
+                    { $sort: { createdAt: -1 } },
+                    { $skip: skip },
+                    { $limit: limitNum }
+                ],
+                total: [
+                    { $count: 'count' }
+                ]
+            }
+        });
+
+        const [result] = await this.invoiceModel.aggregate(pipeline).exec();
+        const data = result.data;
+        const total = result.total[0]?.count || 0;
+
+        return {
+            data,
+            meta: {
+                total,
+                page: pageNum,
+                limit: limitNum,
+                totalPages: Math.ceil(total / limitNum),
+            },
+        };
     }
 
     async findOne(id: string, ownerId: string): Promise<Invoice> {
@@ -379,10 +503,42 @@ export class InvoicesService {
     }
 
     async remove(id: string, ownerId: string): Promise<void> {
-        const result = await this.invoiceModel.updateOne(
-            { _id: new Types.ObjectId(id), ownerId: new Types.ObjectId(ownerId), isDeleted: false }, 
+        // H2 Fix: Check for payments and reverse meter readings before deleting
+        const invoice = await this.invoiceModel.findOne({
+            _id: new Types.ObjectId(id),
+            ownerId: new Types.ObjectId(ownerId),
+            isDeleted: false
+        }).exec();
+        if (!invoice) throw new NotFoundException('Invoice not found');
+
+        // Prevent deleting invoices that have payments
+        if (invoice.paidAmount && invoice.paidAmount > 0) {
+            throw new BadRequestException('Cannot delete invoice with existing payments. Delete payments first.');
+        }
+
+        // Reverse room meter readings if this was a long-term invoice
+        const contract = await this.contractModel.findById(invoice.contractId).exec();
+        if (contract && contract.contractType === ContractType.LONG_TERM && invoice.roomId) {
+            // Find the previous invoice to restore meter readings
+            const previousInvoice = await this.invoiceModel.findOne({
+                contractId: invoice.contractId,
+                _id: { $ne: invoice._id },
+                isDeleted: false,
+            }).sort({ 'billingPeriod.year': -1, 'billingPeriod.month': -1 }).exec();
+
+            const restoreElectric = previousInvoice?.currentElectricIndex ?? contract.initialElectricIndex ?? 0;
+            const restoreWater = previousInvoice?.currentWaterIndex ?? contract.initialWaterIndex ?? 0;
+
+            await this.roomModel.updateOne(
+                { _id: invoice.roomId },
+                { $set: { currentElectricIndex: restoreElectric, currentWaterIndex: restoreWater } }
+            ).exec();
+            this.logger.log(`Invoice ${id} deleted. Room meter readings restored: electric=${restoreElectric}, water=${restoreWater}`);
+        }
+
+        await this.invoiceModel.updateOne(
+            { _id: new Types.ObjectId(id) },
             { $set: { isDeleted: true } }
         ).exec();
-        if (result.matchedCount === 0) throw new NotFoundException('Invoice not found');
     }
 }

@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
-import { PaymentsService } from '@modules/payments/payments.service';
-import { CreatePaymentDto, UpdatePaymentDto } from '@modules/payments/dto/payment.dto';
-import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '@common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
+import { PaymentQueryDto } from '@modules/payments/dto/payment-query.dto';
+import { CreatePaymentDto, UpdatePaymentDto } from '@modules/payments/dto/payment.dto';
+import { PaymentsService } from '@modules/payments/payments.service';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 
 @Controller('payments')
 @UseGuards(JwtAuthGuard)
@@ -15,8 +16,8 @@ export class PaymentsController {
     }
 
     @Get()
-    findAll(@CurrentUser() user: any) {
-        return this.paymentsService.findAll(user.userId);
+    findAll(@CurrentUser() user: any, @Query() query: PaymentQueryDto) {
+        return this.paymentsService.findAll(user.userId, query);
     }
 
     @Get(':id')
