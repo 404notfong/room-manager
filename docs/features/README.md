@@ -8,18 +8,18 @@
 
 | Module          | File                                     | Domain                          |
 |-----------------|------------------------------------------|---------------------------------|
-| auth            | [auth.md](auth.md)                       | TBD                             |
-| users           | [users.md](users.md)                     | TBD                             |
-| buildings       | [buildings.md](buildings.md)             | TBD                             |
-| room-groups     | [room-groups.md](room-groups.md)         | TBD                             |
-| rooms           | [rooms.md](rooms.md)                     | TBD                             |
-| tenants         | [tenants.md](tenants.md)                 | TBD                             |
-| services        | [services.md](services.md)               | TBD                             |
-| contracts       | [contracts.md](contracts.md)             | TBD                             |
-| invoices        | [invoices.md](invoices.md)               | TBD                             |
-| payments        | [payments.md](payments.md)               | TBD                             |
-| notifications   | [notifications.md](notifications.md)     | TBD                             |
-| calendar        | [calendar.md](calendar.md)               | TBD                             |
+| auth            | [auth.md](auth.md)                       | JWT login/register/logout/refresh; multi-tenant auth |
+| users           | [users.md](users.md)                     | Root entity for multi-tenant system; all entities have ownerId reference |
+| buildings       | [buildings.md](buildings.md)             | Top-level organization unit; all rooms/contracts belong to a Building |
+| room-groups     | [room-groups.md](room-groups.md)         | Optional classification labels for Rooms to enable filtering/organizing |
+| rooms           | [rooms.md](rooms.md)                     | Central entity; physical units for rent, link Building with Contract/Invoice |
+| tenants         | [tenants.md](tenants.md)                 | Tenant profiles; linked to Rooms via Contract, source of Invoice/Payment |
+| services        | [services.md](services.md)               | Catalog of chargeable services (electricity, water, etc.) with FIXED/TABLE pricing |
+| contracts       | [contracts.md](contracts.md)             | Core of rental lifecycle; link Room with Tenant, determine finances, dispatch Invoices |
+| invoices        | [invoices.md](invoices.md)               | Financial vouchers from Contract; record all period costs, tracked by Payments |
+| payments        | [payments.md](payments.md)               | Record actual rent payments, auto-update Invoice status and paid amount |
+| notifications   | [notifications.md](notifications.md)     | In-app notifications for events (invoices, contracts, payments, system) |
+| calendar        | [calendar.md](calendar.md)               | View-only aggregate; timeline of Contract and Invoice events by date/month |
 
 ## Template (7 sections, fixed)
 
