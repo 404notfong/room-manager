@@ -116,6 +116,10 @@ export class CreateInvoiceDto {
 
     // === Charges ===
     @IsNumber()
+    @IsOptional()
+    billingMonths?: number;
+
+    @IsNumber()
     @IsNotEmpty()
     rentAmount: number;
 
@@ -140,6 +144,10 @@ export class CreateInvoiceDto {
     @Type(() => Date)
     @IsNotEmpty()
     dueDate: Date;
+
+    @IsBoolean()
+    @IsOptional()
+    applyDeposit?: boolean;
 
     @IsString()
     @IsOptional()

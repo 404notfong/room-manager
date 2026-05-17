@@ -16,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
 import { DatePicker } from '@/components/ui/date-picker';
 import { DateTimePicker } from '@/components/ui/datetime-picker';
-import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,13 +36,14 @@ import { format } from 'date-fns';
 type ContractFormValues = z.infer<ReturnType<typeof useContractSchema>>;
 
 interface ContractFormProps {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
     contract?: any; // If editing
     preSelectedRoomId?: string; // For creating contract from dashboard with pre-selected room
+    onSuccess?: () => void;
+    formId?: string;
+    renderHeaderButtons?: (buttons: React.ReactNode) => void;
 }
 
-export default function ContractForm({ open, onOpenChange, contract, preSelectedRoomId }: ContractFormProps) {
+export default function ContractForm({ contract, preSelectedRoomId, onSuccess, formId, renderHeaderButtons }: ContractFormProps) {
     const { t } = useTranslation();
     const { toast } = useToast();
     const queryClient = useQueryClient();
@@ -62,7 +63,7 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
             const response = await apiClient.get(`/invoices?contractId=${contract._id}&limit=1`);
             return response.data;
         },
-        enabled: !!contract?._id && isActiveContract && open,
+        enabled: !!contract?._id && isActiveContract,
     });
     const hasInvoices = isActiveContract && (contractInvoices?.data?.length > 0 || contractInvoices?.total > 0);
 
@@ -105,6 +106,7 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
             setSelectedBuilding(selectedBuildingId);
             form.setValue('buildingId', selectedBuildingId, { shouldValidate: true });
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedBuildingId, contract, preSelectedRoomId]);
 
     // Fetch pre-selected room data
@@ -114,7 +116,7 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
             const response = await apiClient.get(`/rooms/${preSelectedRoomId}`);
             return response.data;
         },
-        enabled: !!preSelectedRoomId && open && !contract,
+        enabled: !!preSelectedRoomId && !contract,
     });
 
     // Watch start date to update disabled state of end date picker
@@ -122,7 +124,7 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
 
     // Auto-select building and room when preSelectedRoomId is provided
     useEffect(() => {
-        if (preSelectedRoom && open && !contract) {
+        if (preSelectedRoom && !contract) {
             // IMPORTANT: Reset form completely first to clear any leftover data from previous edit
             form.reset({
                 roomType: 'LONG_TERM',
@@ -185,11 +187,12 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
             form.setValue('initialElectricIndex', room.currentElectricIndex || 0);
             form.setValue('initialWaterIndex', room.currentWaterIndex || 0);
         }
-    }, [preSelectedRoom, open, contract, form]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [preSelectedRoom, contract]);
 
     // Handle contract editing
     useEffect(() => {
-        if (contract && open) {
+        if (contract) {
             const isShortTerm = contract.contractType === 'SHORT_TERM' || contract.roomType === 'SHORT_TERM';
             form.reset({
                 buildingId: contract.roomId?.buildingId?._id || (typeof contract.roomId?.buildingId === 'string' ? contract.roomId.buildingId : '') || contract.buildingId || '',
@@ -225,27 +228,9 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
             });
             setSelectedBuilding(contract.roomId?.buildingId?._id || (typeof contract.roomId?.buildingId === 'string' ? contract.roomId.buildingId : '') || contract.buildingId || '');
             setActiveTab('existing');
-        } else if (!contract && open && !preSelectedRoomId) {
-            form.reset({
-                roomType: 'LONG_TERM',
-                paymentCycle: 'MONTHLY',
-                paymentDueDay: 1,
-                rentPrice: 0,
-                electricityPrice: 0,
-                waterPrice: 0,
-                depositAmount: 0,
-                startDate: new Date().toISOString().split('T')[0],
-                endDate: undefined,
-                serviceCharges: [],
-                shortTermPrices: [],
-                pricePerHour: 0,
-                fixedPrice: 0,
-                initialElectricIndex: 0,
-                initialWaterIndex: 0,
-                buildingId: selectedBuildingId || ''
-            });
         }
-    }, [contract, open, form, preSelectedRoomId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [contract]);
 
     const { fields: serviceFields, append: appendService, remove: removeService } = useFieldArray({
         control: form.control,
@@ -294,14 +279,16 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
     };
 
     // Auto-initialize price table when mode changes
+    // Skip when preSelectedRoomId or contract exists - those paths handle price population
     useEffect(() => {
+        if (preSelectedRoomId || contract) return;
         if (roomType === 'SHORT_TERM') {
             const isTableMode = (currentShortTermType === 'HOURLY' && currentHourlyMode === 'TABLE') || currentShortTermType === 'DAILY';
             if (isTableMode && priceFields.length === 0) {
                 handleAddPriceTier();
             }
         }
-    }, [roomType, currentShortTermType, currentHourlyMode, priceFields.length]);
+    }, [roomType, currentShortTermType, currentHourlyMode, priceFields.length, preSelectedRoomId, contract]);
 
     // Queries
     // Queries for buildings and services ... (tenants query removed)
@@ -423,8 +410,7 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
             queryClient.invalidateQueries({ queryKey: ['contracts'] });
             queryClient.invalidateQueries({ queryKey: ['rooms-dashboard'] }); // Refresh dashboard
             toast({ title: t('common.success') });
-            onOpenChange(false);
-            onOpenChange(false);
+            onSuccess?.();
             form.reset();
         },
         onError: (err: any) => {
@@ -468,7 +454,7 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
             queryClient.invalidateQueries({ queryKey: ['rooms-dashboard'] }); // Refresh dashboard
             queryClient.invalidateQueries({ queryKey: ['tenants'] }); // New tenant
             toast({ title: t('common.success') });
-            onOpenChange(false);
+            onSuccess?.();
             form.reset();
         },
         onError: (err: any) => {
@@ -509,9 +495,10 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
     });
 
     const onSubmit = (data: ContractFormValues) => {
+        // When using formId, read draft mode from form DOM data attribute
+        // (set by external header buttons via onClick before submit)
         const savingAsDraft = isDraftRef.current;
         if (contract) {
-            // Edit mode: pass status based on isDraft
             updateMutation.mutate({
                 id: contract._id,
                 data: {
@@ -613,33 +600,85 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
         }
     };
 
-
+    // Pass header buttons to parent via callback
+    useEffect(() => {
+        if (!formId || !renderHeaderButtons) return;
+        renderHeaderButtons(
+            <>
+                {(!contract || contract.status === 'DRAFT') && (
+                    <Button
+                        type="submit"
+                        form={formId}
+                        variant="secondary"
+                        disabled={createMutation.isPending || updateMutation.isPending}
+                        onClick={() => {
+                            isDraftRef.current = true;
+                            setIsDraft(true);
+                        }}
+                    >
+                        {((createMutation.isPending || updateMutation.isPending) && isDraft) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {!contract ? t('contracts.depositShort') : t('common.save')}
+                    </Button>
+                )}
+                <Button
+                    type="submit"
+                    form={formId}
+                    disabled={createMutation.isPending || updateMutation.isPending}
+                    onClick={() => {
+                        isDraftRef.current = false;
+                        setIsDraft(false);
+                    }}
+                >
+                    {((createMutation.isPending || updateMutation.isPending) && !isDraft) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {contract ? (contract.status === 'ACTIVE' ? t('common.save') : t('contracts.activate')) : t('common.create')}
+                </Button>
+            </>
+        );
+    }, [formId, renderHeaderButtons, contract, createMutation.isPending, updateMutation.isPending, isDraft, t]);
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent
-                className="max-w-7xl max-h-[95vh] overflow-y-auto w-full"
-                onPointerDownOutside={(e) => e.preventDefault()}
-                onEscapeKeyDown={(e) => e.preventDefault()}
-            >
-
-                <DialogHeader>
-                    <DialogTitle>{contract ? t('contracts.editTitle') : t('contracts.createTitle')}</DialogTitle>
-                    <DialogDescription className="sr-only">
-                        {contract ? t('contracts.editDescription') : t('contracts.createDescription')}
-                    </DialogDescription>
-                </DialogHeader>
-
+        <>
+                {formId && !renderHeaderButtons && (
+                    <div className="flex justify-end gap-3 mb-4">
+                        {(!contract || contract.status === 'DRAFT') && (
+                            <Button
+                                type="submit"
+                                form={formId}
+                                variant="secondary"
+                                disabled={createMutation.isPending || updateMutation.isPending}
+                                onClick={() => {
+                                    isDraftRef.current = true;
+                                    setIsDraft(true);
+                                }}
+                            >
+                                {((createMutation.isPending || updateMutation.isPending) && isDraft) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                {!contract ? t('contracts.depositShort') : t('common.save')}
+                            </Button>
+                        )}
+                        <Button
+                            type="submit"
+                            form={formId}
+                            disabled={createMutation.isPending || updateMutation.isPending}
+                            onClick={() => {
+                                isDraftRef.current = false;
+                                setIsDraft(false);
+                            }}
+                        >
+                            {((createMutation.isPending || updateMutation.isPending) && !isDraft) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            {contract ? (contract.status === 'ACTIVE' ? t('common.save') : t('contracts.activate')) : t('common.create')}
+                        </Button>
+                    </div>
+                )}
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
+                    <form id={formId} onSubmit={form.handleSubmit(onSubmit, (errors) => {
                         console.error('Form validation errors:', errors);
                         toast({
                             variant: "destructive",
                             title: t('common.error'),
                             description: t('validation.pleaseCheckInput', 'Vui lòng kiểm tra lại thông tin nhập liệu')
                         });
-                    })} className="flex flex-col flex-1 overflow-hidden">
-                        <DialogBody>
+                    })} className="space-y-6">
+                        <div>
 
                             <div className="flex gap-6 flex-col md:flex-row">
                                 {/* Left Column: Contract Configuration */}
@@ -1855,37 +1894,36 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
 
                             </div>
 
-                        </DialogBody>
-                        <DialogFooter className="gap-2">
-                            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                                {t('common.cancel')}
-                            </Button>
-                            {(!contract || contract.status === 'DRAFT') && (
+                        </div>
+                        {!formId && (
+                            <div className="flex justify-end gap-3 pt-4 border-t">
+                                {(!contract || contract.status === 'DRAFT') && (
+                                    <Button
+                                        type="submit"
+                                        variant="secondary"
+                                        disabled={createMutation.isPending || updateMutation.isPending}
+                                        onClick={() => {
+                                            isDraftRef.current = true;
+                                            setIsDraft(true);
+                                        }}
+                                    >
+                                        {((createMutation.isPending || updateMutation.isPending) && isDraft) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                        {!contract ? t('contracts.depositShort') : t('common.save')}
+                                    </Button>
+                                )}
                                 <Button
                                     type="submit"
-                                    variant="secondary"
                                     disabled={createMutation.isPending || updateMutation.isPending}
                                     onClick={() => {
-                                        isDraftRef.current = true;
-                                        setIsDraft(true);
+                                        isDraftRef.current = false;
+                                        setIsDraft(false);
                                     }}
                                 >
-                                    {((createMutation.isPending || updateMutation.isPending) && isDraft) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    {!contract ? t('contracts.depositShort') : t('common.save')}
+                                    {((createMutation.isPending || updateMutation.isPending) && !isDraft) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    {contract ? (contract.status === 'ACTIVE' ? t('common.save') : t('contracts.activate')) : t('common.create')}
                                 </Button>
-                            )}
-                            <Button
-                                type="submit"
-                                disabled={createMutation.isPending || updateMutation.isPending}
-                                onClick={() => {
-                                    isDraftRef.current = false;
-                                    setIsDraft(false);
-                                }}
-                            >
-                                {((createMutation.isPending || updateMutation.isPending) && !isDraft) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                {contract ? (contract.status === 'ACTIVE' ? t('common.save') : t('contracts.activate')) : t('common.create')}
-                            </Button>
-                        </DialogFooter>
+                            </div>
+                        )}
 
                     </form>
                 </Form>
@@ -1907,7 +1945,6 @@ export default function ContractForm({ open, onOpenChange, contract, preSelected
                         />
                     </DialogContent>
                 </Dialog>
-            </DialogContent >
-        </Dialog >
+        </>
     );
 }

@@ -4,93 +4,134 @@
 
 @layer base {
   :root {
-    /* Minimalist Pastel Theme - Light Mode */
-    --background: 250 20% 98%;
-    /* Soft Lavender White */
-    --foreground: 222 15% 15%;
-    /* Soft Charcoal - Darkened for better readability */
+    /* ========================================
+       Room Manager Design System — Light Mode
+       Style: Minimalist Pastel · Glassmorphism
+       ======================================== */
 
-    --card: 0 0% 100%;
-    /* White */
-    --card-foreground: 222 15% 15%;
+    /* Core surfaces */
+    --background: 235 30% 97%;     /* #F7F8FC – Lavender White */
+    --foreground: 230 30% 17%;     /* #1E2338 – Soft Charcoal */
+
+    --card: 0 0% 100%;             /* #FFFFFF */
+    --card-foreground: 230 30% 17%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222 15% 15%;
+    --popover-foreground: 230 30% 17%;
 
-    --primary: 250 60% 60%;
-    /* Deep Pastel Purple - Darkened for text contrast */
+    /* Brand colors */
+    --primary: 239 84% 67%;        /* #6366F1 – Pastel Indigo */
     --primary-foreground: 0 0% 98%;
-    /* White text on darker purple button */
 
-    --secondary: 14 90% 85%;
-    /* Pastel Peach */
+    --secondary: 0 95% 82%;        /* #FCA5A5 – Pastel Peach */
     --secondary-foreground: 222 47% 11%;
 
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-
-    --accent: 160 60% 75%;
-    /* Pastel Mint */
+    --accent: 160 60% 52%;         /* #34D399 – Pastel Mint */
     --accent-foreground: 222 47% 11%;
 
-    --destructive: 0 84% 60%;
+    /* Neutral */
+    --muted: 210 40% 96%;          /* #F1F5F9 – Slate 100 */
+    --muted-foreground: 215 16% 47%;
+
+    /* Destructive */
+    --destructive: 0 84% 60%;      /* #EF4444 */
     --destructive-foreground: 0 0% 100%;
 
-    --border: 214 15% 88%;
-    /* Soft, light border - minimalist */
+    /* Borders & inputs */
+    --border: 214 15% 88%;         /* Soft light border */
     --input: 0 0% 100%;
-    /* Transparent/white - matches card background */
-    --ring: 250 60% 60%;
-    /* Primary color for focus rings */
+    --ring: 239 84% 67%;           /* Primary focus ring */
 
-    --radius: 0.75rem;
-    /* 12px Rounded Corners */
+    --radius: 0.75rem;             /* 12px default radius */
 
-    /* Status colors - keep vivid for utility */
-    --success: 161 80% 40%;
-    --warning: 45 90% 60%;
-    --error: 0 80% 60%;
-    --info: 200 80% 50%;
+    /* ---- Status colors (semantic) ---- */
+    --success: 160 64% 40%;        /* #10B981 */
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;         /* #F59E0B */
+    --warning-foreground: 0 0% 100%;
+    --info: 217 91% 60%;           /* #3B82F6 */
+    --info-foreground: 0 0% 100%;
+    --error: 0 84% 60%;            /* #EF4444 */
+    --error-foreground: 0 0% 100%;
+
+    /* ---- Chart palette ---- */
+    --chart-1: 239 84% 67%;        /* #6366F1 – Indigo */
+    --chart-2: 160 64% 40%;        /* #10B981 – Emerald */
+    --chart-3: 38 92% 50%;         /* #F59E0B – Amber */
+    --chart-4: 330 81% 60%;        /* #EC4899 – Pink */
+    --chart-5: 217 91% 60%;        /* #3B82F6 – Blue */
+    --chart-6: 258 90% 66%;        /* #8B5CF6 – Violet */
+
+    /* ---- Sidebar tokens ---- */
+    --sidebar: 0 0% 100%;
+    --sidebar-foreground: 230 30% 17%;
+    --sidebar-border: 214 15% 88%;
+    --sidebar-accent: 239 84% 67%;
+    --sidebar-accent-foreground: 0 0% 98%;
   }
 
   .dark {
-    /* Minimalist Pastel Theme - Dark Mode */
-    --background: 222 20% 12%;
-    /* Deep Muted Navy */
-    --foreground: 210 20% 96%;
-    /* Bright Soft White */
+    /* ========================================
+       Room Manager Design System — Dark Mode
+       ======================================== */
 
-    --card: 222 20% 16%;
-    /* Lighter Navy for Cards */
-    --card-foreground: 210 20% 96%;
+    /* Core surfaces */
+    --background: 228 28% 14%;     /* #181D2E – Deep Navy */
+    --foreground: 225 25% 95%;     /* #EFF1F6 – Bright White */
 
-    --popover: 222 20% 16%;
-    --popover-foreground: 210 20% 96%;
+    --card: 228 26% 19%;           /* #222840 – Card Navy */
+    --card-foreground: 225 25% 95%;
 
-    --primary: 250 90% 85%;
-    /* Luminous Pastel Purple - Brightened */
-    --primary-foreground: 222 20% 12%;
-    /* Dark text on bright button */
+    --popover: 228 26% 19%;
+    --popover-foreground: 225 25% 95%;
 
-    --secondary: 14 80% 75%;
-    /* Pastel Peach Muted */
+    /* Brand colors (luminous in dark mode) */
+    --primary: 255 95% 87%;        /* #C4B5FD – Luminous Lavender */
+    --primary-foreground: 228 28% 14%;
+
+    --secondary: 330 90% 80%;      /* #F9A8D4 – Soft Pink */
     --secondary-foreground: 222 47% 11%;
 
-    --muted: 222 20% 20%;
-    --muted-foreground: 215 20% 75%;
-
-    --accent: 160 50% 60%;
-    /* Muted Pastel Mint */
+    --accent: 160 66% 67%;         /* #6EE7B7 – Bright Mint */
     --accent-foreground: 222 47% 11%;
 
+    /* Neutral */
+    --muted: 228 28% 23%;          /* #2A3150 – Muted Navy */
+    --muted-foreground: 215 25% 68%;
+
+    /* Destructive */
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 217 15% 28%;
-    /* Soft border for dark mode */
-    --input: 222 20% 16%;
-    /* Matches card background in dark mode */
-    --ring: 250 90% 85%;
+    /* Borders & inputs */
+    --border: 220 18% 28%;         /* Soft dark border */
+    --input: 228 26% 19%;
+    --ring: 255 95% 87%;
+
+    /* ---- Status colors (dark) ---- */
+    --success: 160 60% 52%;        /* #34D399 */
+    --success-foreground: 228 28% 14%;
+    --warning: 43 96% 56%;         /* #FBBF24 */
+    --warning-foreground: 228 28% 14%;
+    --info: 213 94% 68%;           /* #60A5FA */
+    --info-foreground: 228 28% 14%;
+    --error: 0 91% 71%;            /* #F87171 */
+    --error-foreground: 228 28% 14%;
+
+    /* ---- Chart palette (dark) ---- */
+    --chart-1: 234 89% 84%;        /* #A5B4FC */
+    --chart-2: 160 60% 52%;        /* #34D399 */
+    --chart-3: 43 96% 56%;         /* #FBBF24 */
+    --chart-4: 330 90% 80%;        /* #F9A8D4 */
+    --chart-5: 213 94% 68%;        /* #60A5FA */
+    --chart-6: 255 95% 87%;        /* #C4B5FD */
+
+    /* ---- Sidebar tokens (dark) ---- */
+    --sidebar: 228 28% 14%;
+    --sidebar-foreground: 225 25% 95%;
+    --sidebar-border: 220 18% 28%;
+    --sidebar-accent: 255 95% 87%;
+    --sidebar-accent-foreground: 228 28% 14%;
   }
 }
 
@@ -106,6 +147,7 @@
   /* Date picker icon alignment fix */
   input[type="date"] {
     display: block !important;
+    position: relative;
   }
 
   input[type="date"]::-webkit-calendar-picker-indicator {
@@ -116,12 +158,5 @@
     transform: translateY(-50%);
     margin: 0;
     padding: 0;
-  }
-
-  /* Ensure the input container has position relative if needed, 
-     but standard inputs are generally enough for relative positioning of children in some engines.
-     However, to be safe: */
-  input[type="date"] {
-    position: relative;
   }
 }

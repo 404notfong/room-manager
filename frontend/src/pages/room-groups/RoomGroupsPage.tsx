@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, Layers, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -21,12 +22,10 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import apiClient from '@/api/client';
 import Pagination from '@/components/Pagination';
-import RoomGroupForm, { RoomGroupFormData } from '@/components/forms/RoomGroupForm';
 import { useBuildingStore } from '@/stores/buildingStore';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useColumnVisibility, ColumnConfig } from '@/hooks/useColumnVisibility';
@@ -48,50 +47,24 @@ const roomGroupsApi = {
         const response = await apiClient.get('/room-groups', { params });
         return response.data;
     },
-    create: async (data: RoomGroupFormData) => {
-        // Clean up empty strings for optional fields
-        const cleanData = {
-            ...data,
-            description: data.description || undefined,
-            color: data.color || undefined,
-        };
-        const response = await apiClient.post('/room-groups', cleanData);
-        return response.data;
-    },
-    update: async (id: string, data: Partial<RoomGroupFormData>) => {
-        // Clean up empty strings for optional fields
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { buildingId, ...rest } = data;
-        const cleanData = {
-            ...rest,
-            description: rest.description || undefined,
-            color: rest.color || undefined,
-        };
-        const response = await apiClient.put(`/room-groups/${id}`, cleanData);
-        return response.data;
-    },
     delete: async (id: string) => {
         const response = await apiClient.delete(`/room-groups/${id}`);
         return response.data;
     },
 };
 
-
-
 export default function RoomGroupsPage() {
     const { t } = useTranslation();
+    const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { selectedBuildingId } = useBuildingStore();
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearchTerm = useDebounce(searchTerm, 500);
-    const [isAddOpen, setIsAddOpen] = useState(false);
-    const [isEditOpen, setIsEditOpen] = useState(false);
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
     const [selectedGroup, setSelectedGroup] = useState<RoomGroup | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
 
-    // Column visibility configuration
     const columnConfig: ColumnConfig[] = [
         { id: 'name', label: t('roomGroups.name') },
         { id: 'code', label: t('roomGroups.code') },
@@ -114,32 +87,6 @@ export default function RoomGroupsPage() {
     const roomGroups: RoomGroup[] = Array.isArray(roomGroupsData?.data) ? roomGroupsData.data : [];
     const meta = roomGroupsData?.meta || { total: 0, totalPages: 0 };
 
-    const createMutation = useMutation({
-        mutationFn: (data: RoomGroupFormData) => roomGroupsApi.create(data),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['room-groups'] });
-            setIsAddOpen(false);
-            toast({ title: t('roomGroups.createSuccess') });
-        },
-        onError: () => {
-            toast({ variant: 'destructive', title: t('roomGroups.createError') });
-        },
-    });
-
-    const updateMutation = useMutation({
-        mutationFn: ({ id, data }: { id: string; data: Partial<RoomGroupFormData> }) =>
-            roomGroupsApi.update(id, data),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['room-groups'] });
-            setIsEditOpen(false);
-            setSelectedGroup(null);
-            toast({ title: t('roomGroups.updateSuccess') });
-        },
-        onError: () => {
-            toast({ variant: 'destructive', title: t('roomGroups.updateError') });
-        },
-    });
-
     const deleteMutation = useMutation({
         mutationFn: roomGroupsApi.delete,
         onSuccess: () => {
@@ -152,11 +99,6 @@ export default function RoomGroupsPage() {
             toast({ variant: 'destructive', title: t('roomGroups.deleteError') });
         },
     });
-
-    const handleEdit = (group: RoomGroup) => {
-        setSelectedGroup(group);
-        setIsEditOpen(true);
-    };
 
     const handleDelete = (group: RoomGroup) => {
         setSelectedGroup(group);
@@ -184,39 +126,17 @@ export default function RoomGroupsPage() {
 
     return (
         <div className="space-y-6">
-            {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">{t('roomGroups.title')}</h1>
                     <p className="text-muted-foreground">{t('roomGroups.subtitle')}</p>
                 </div>
-                <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-                    <DialogTrigger asChild>
-                        <Button>
-                            <Plus className="mr-2 h-4 w-4" />
-                            {t('roomGroups.add')}
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent
-                        onPointerDownOutside={(e) => e.preventDefault()}
-                        onEscapeKeyDown={(e) => e.preventDefault()}
-                    >
-
-                        <DialogHeader>
-                            <DialogTitle>{t('roomGroups.addTitle')}</DialogTitle>
-                            <DialogDescription>{t('roomGroups.addDescription')}</DialogDescription>
-                        </DialogHeader>
-                        <RoomGroupForm
-                            onSubmit={(data) => createMutation.mutate(data)}
-                            onCancel={() => setIsAddOpen(false)}
-                            isSubmitting={createMutation.isPending}
-                            preselectedBuildingId={selectedBuildingId}
-                        />
-                    </DialogContent>
-                </Dialog>
+                <Button onClick={() => navigate('/room-groups/new')}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    {t('roomGroups.add')}
+                </Button>
             </div>
 
-            {/* Search */}
             <div className="flex items-center gap-2">
                 <div className="relative flex-1 max-w-sm">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -229,7 +149,6 @@ export default function RoomGroupsPage() {
                 </div>
             </div>
 
-            {/* Table */}
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
                     <div>
@@ -287,7 +206,7 @@ export default function RoomGroupsPage() {
                                         )}
                                         <TableCell>
                                             <div className="flex items-center gap-1">
-                                                <Button variant="ghost" size="icon" onClick={() => handleEdit(group)}>
+                                                <Button variant="ghost" size="icon" onClick={() => navigate(`/room-groups/${group._id}/edit`)}>
                                                     <Pencil className="h-4 w-4" />
                                                 </Button>
                                                 <Button variant="ghost" size="icon" onClick={() => handleDelete(group)} className="text-destructive hover:text-destructive">
@@ -316,45 +235,12 @@ export default function RoomGroupsPage() {
                 </CardContent>
             </Card>
 
-            {/* Edit Dialog */}
-            <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-                <DialogContent
-                    onPointerDownOutside={(e) => e.preventDefault()}
-                    onEscapeKeyDown={(e) => e.preventDefault()}
-                >
-
-                    <DialogHeader>
-                        <DialogTitle>{t('roomGroups.editTitle')}</DialogTitle>
-                        <DialogDescription>{t('roomGroups.editDescription')}</DialogDescription>
-                    </DialogHeader>
-                    {selectedGroup && (
-                        <RoomGroupForm
-                            defaultValues={{
-                                buildingId: typeof selectedGroup.buildingId === 'object' ? selectedGroup.buildingId._id : selectedGroup.buildingId,
-                                name: selectedGroup.name,
-                                description: selectedGroup.description,
-                                color: selectedGroup.color,
-                                sortOrder: selectedGroup.sortOrder,
-                                isActive: selectedGroup.isActive,
-                            }}
-                            onSubmit={(data) =>
-                                updateMutation.mutate({ id: selectedGroup._id, data })
-                            }
-                            onCancel={() => setIsEditOpen(false)}
-                            isSubmitting={updateMutation.isPending}
-                            isEditing
-                        />
-                    )}
-                </DialogContent>
-            </Dialog>
-
             {/* Delete Dialog */}
             <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
                 <DialogContent
                     onPointerDownOutside={(e) => e.preventDefault()}
                     onEscapeKeyDown={(e) => e.preventDefault()}
                 >
-
                     <DialogHeader>
                         <DialogTitle>{t('roomGroups.deleteTitle')}</DialogTitle>
                         <DialogDescription>

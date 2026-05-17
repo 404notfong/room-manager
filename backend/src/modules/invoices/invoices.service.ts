@@ -1,7 +1,8 @@
-import { ContractStatus, ContractType, InvoiceType, PriceTableType, RoomStatus, ShortTermPricingType, TenantStatus } from '@common/constants/enums';
+import { ContractStatus, ContractType, InvoiceType, PaymentMethod, PriceTableType, RoomStatus, ShortTermPricingType, TenantStatus } from '@common/constants/enums';
 import { Contract, ContractDocument } from '@modules/contracts/schemas/contract.schema';
 import { CreateInvoiceDto, UpdateInvoiceDto } from '@modules/invoices/dto/invoice.dto';
 import { Invoice, InvoiceDocument } from '@modules/invoices/schemas/invoice.schema';
+import { Payment, PaymentDocument } from '@modules/payments/schemas/payment.schema';
 import { Room, RoomDocument } from '@modules/rooms/schemas/room.schema';
 import { Tenant, TenantDocument } from '@modules/tenants/schemas/tenant.schema';
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
@@ -18,6 +19,7 @@ export class InvoicesService {
         @InjectModel(Contract.name) private contractModel: Model<ContractDocument>,
         @InjectModel(Room.name) private roomModel: Model<RoomDocument>,
         @InjectModel(Tenant.name) private tenantModel: Model<TenantDocument>,
+        @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
     ) { }
 
     /**
@@ -169,6 +171,39 @@ export class InvoicesService {
             );
         }
 
+        // 1b & 1c. Skip billing period validation for FINAL invoices (contract termination)
+        const isFinalInvoice = createInvoiceDto.invoiceType === InvoiceType.FINAL;
+        
+        if (!isFinalInvoice) {
+            // 1b. Validate billing period is not in the future (> current month)
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            const currentMonth = now.getMonth() + 1; // 1-indexed
+            if (createInvoiceDto.year > currentYear || 
+                (createInvoiceDto.year === currentYear && createInvoiceDto.month > currentMonth)) {
+                throw new BadRequestException(
+                    `Cannot create invoice for future period: ${createInvoiceDto.month}/${createInvoiceDto.year}`
+                );
+            }
+
+            // 1c. Validate billing period is after the last invoiced month
+            const lastInvoice = await this.invoiceModel.findOne({
+                contractId: new Types.ObjectId(createInvoiceDto.contractId),
+                isDeleted: false,
+            }).sort({ 'billingPeriod.year': -1, 'billingPeriod.month': -1 }).exec();
+
+            if (lastInvoice) {
+                const lastYear = lastInvoice.billingPeriod?.year || 0;
+                const lastMonth = lastInvoice.billingPeriod?.month || 0;
+                if (createInvoiceDto.year < lastYear || 
+                    (createInvoiceDto.year === lastYear && createInvoiceDto.month <= lastMonth)) {
+                    throw new BadRequestException(
+                        `Billing period must be after the last invoiced period (${lastMonth}/${lastYear})`
+                    );
+                }
+            }
+        }
+
         // 2. Fetch contract for snapshot and validation
         const contract = await this.contractModel.findOne({
             _id: new Types.ObjectId(createInvoiceDto.contractId),
@@ -189,7 +224,8 @@ export class InvoicesService {
         let electricityAmount = 0;
         let waterUsed = 0;
         let waterAmount = 0;
-        let rentAmount = createInvoiceDto.rentAmount;
+        const billingMonths = createInvoiceDto.billingMonths || contract.paymentCycleMonths || 1;
+        let rentAmount = createInvoiceDto.rentAmount ?? (contract.rentPrice || 0);
         let shortTermCalculation = '';
 
         const isShortTerm = contract.roomType === 'SHORT_TERM';
@@ -318,7 +354,7 @@ export class InvoicesService {
 
             // 7. Update contract's nextPaymentDate (for REGULAR invoices only)
             if (createInvoiceDto.invoiceType !== InvoiceType.FINAL) {
-                const cycleMonths = contract.paymentCycleMonths || 1;
+                const cycleMonths = createInvoiceDto.billingMonths || contract.paymentCycleMonths || 1;
                 const dueDay = contract.paymentDueDay || contract.startDate.getDate();
                 const currentNextPayment = contract.nextPaymentDate || contract.startDate;
                 const newNextPaymentDate = this.calculateNextPaymentDate(currentNextPayment, cycleMonths, dueDay);
@@ -367,6 +403,76 @@ export class InvoicesService {
                     }
                 ).exec();
                 this.logger.log(`Tenant ${tenantId} set to ACTIVE, currentRoomId cleared`);
+            }
+        }
+
+        // 9. Handle deposit deduction for FINAL invoices
+        if (isFinalInvoice && createInvoiceDto.applyDeposit && contract.depositAmount > 0) {
+            const depositAmount = contract.depositAmount;
+            
+            if (depositAmount >= totalAmount) {
+                // Deposit covers entire invoice → invoice fully paid
+                const refundAmount = depositAmount - totalAmount;
+                
+                // Create deposit deduction payment for the invoice amount
+                const depositPayment = new this.paymentModel({
+                    ownerId: new Types.ObjectId(ownerId),
+                    invoiceId: savedInvoice._id,
+                    contractId: contract._id,
+                    tenantId: new Types.ObjectId(createInvoiceDto.tenantId),
+                    amount: totalAmount,
+                    paymentMethod: PaymentMethod.DEPOSIT_DEDUCTION,
+                    paymentDate: new Date(),
+                    notes: `Trừ tiền cọc (${depositAmount.toLocaleString()}đ)`,
+                });
+                await depositPayment.save();
+
+                // Update invoice to fully paid
+                await this.invoiceModel.updateOne(
+                    { _id: savedInvoice._id },
+                    { $set: { paidAmount: totalAmount, remainingAmount: 0, status: 'PAID', paidDate: new Date() } }
+                ).exec();
+
+                // If deposit > total → create negative refund payment
+                if (refundAmount > 0) {
+                    const refundPayment = new this.paymentModel({
+                        ownerId: new Types.ObjectId(ownerId),
+                        invoiceId: savedInvoice._id,
+                        contractId: contract._id,
+                        tenantId: new Types.ObjectId(createInvoiceDto.tenantId),
+                        amount: -refundAmount,
+                        paymentMethod: PaymentMethod.DEPOSIT_DEDUCTION,
+                        paymentDate: new Date(),
+                        notes: `Hoàn cọc (thừa ${refundAmount.toLocaleString()}đ)`,
+                    });
+                    await refundPayment.save();
+                    this.logger.log(`Deposit refund payment created: -${refundAmount}`);
+                }
+
+                this.logger.log(`FINAL invoice ${invoiceNumber}: deposit ${depositAmount} >= total ${totalAmount}. Invoice fully paid.`);
+            } else {
+                // Deposit partially covers invoice
+                const remaining = totalAmount - depositAmount;
+                
+                const depositPayment = new this.paymentModel({
+                    ownerId: new Types.ObjectId(ownerId),
+                    invoiceId: savedInvoice._id,
+                    contractId: contract._id,
+                    tenantId: new Types.ObjectId(createInvoiceDto.tenantId),
+                    amount: depositAmount,
+                    paymentMethod: PaymentMethod.DEPOSIT_DEDUCTION,
+                    paymentDate: new Date(),
+                    notes: `Trừ tiền cọc (${depositAmount.toLocaleString()}đ)`,
+                });
+                await depositPayment.save();
+
+                // Update invoice with partial payment
+                await this.invoiceModel.updateOne(
+                    { _id: savedInvoice._id },
+                    { $set: { paidAmount: depositAmount, remainingAmount: remaining, status: 'PARTIAL' } }
+                ).exec();
+
+                this.logger.log(`FINAL invoice ${invoiceNumber}: deposit ${depositAmount} < total ${totalAmount}. Remaining: ${remaining}`);
             }
         }
 

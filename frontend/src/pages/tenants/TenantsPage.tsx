@@ -2,14 +2,12 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Users, Search, Phone, Mail, Eye, Shield, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Users, Search, Phone, Mail, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import TenantHistoryTimeline from '@/components/TenantHistoryTimeline';
 import {
     Table,
     TableBody,
@@ -20,18 +18,15 @@ import {
 } from '@/components/ui/table';
 import {
     Dialog,
-    DialogBody,
     DialogContent,
     DialogDescription,
     DialogFooter,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import apiClient from '@/api/client';
 import Pagination from '@/components/Pagination';
-import TenantForm, { TenantFormData } from '@/components/forms/TenantForm';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useColumnVisibility, ColumnConfig } from '@/hooks/useColumnVisibility';
 import { ColumnVisibilityToggle } from '@/components/ColumnVisibilityToggle';
@@ -48,7 +43,6 @@ interface Tenant {
     gender?: 'MALE' | 'FEMALE' | 'OTHER';
     address?: string;
     occupation?: string;
-    // Map emergency contact
     emergencyContact?: {
         name?: string;
         phone?: string;
@@ -63,40 +57,6 @@ const tenantsApi = {
         const response = await apiClient.get('/tenants', { params });
         return response.data;
     },
-    create: async (data: TenantFormData) => {
-        // Map frontend fields to backend fields
-        const backendData = {
-            fullName: data.fullName,
-            idCard: data.idNumber, // Backend uses idCard, not idNumber
-            phone: data.phone,
-            email: data.email || undefined,
-            dateOfBirth: data.dateOfBirth || undefined,
-            gender: data.gender || undefined,
-            permanentAddress: data.address || undefined,
-            occupation: data.occupation || undefined,
-            status: data.status || undefined,
-            emergencyContact: data.emergencyContact || undefined,
-        };
-        const response = await apiClient.post('/tenants', backendData);
-        return response.data;
-    },
-    update: async (id: string, data: Partial<TenantFormData>) => {
-        // Map frontend fields to backend fields
-        const backendData: any = {};
-        if (data.fullName) backendData.fullName = data.fullName;
-        if (data.phone) backendData.phone = data.phone;
-        if (data.email) backendData.email = data.email;
-        if (data.idNumber) backendData.idCard = data.idNumber;
-        if (data.dateOfBirth) backendData.dateOfBirth = data.dateOfBirth;
-        if (data.gender) backendData.gender = data.gender;
-        if (data.occupation) backendData.occupation = data.occupation;
-        if (data.status) backendData.status = data.status;
-        if (data.emergencyContact) backendData.emergencyContact = data.emergencyContact;
-        if (data.address) backendData.permanentAddress = data.address;
-
-        const response = await apiClient.put(`/tenants/${id}`, backendData);
-        return response.data;
-    },
     delete: async (id: string) => {
         const response = await apiClient.delete(`/tenants/${id}`);
         return response.data;
@@ -109,16 +69,11 @@ export default function TenantsPage() {
     const queryClient = useQueryClient();
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearchTerm = useDebounce(searchTerm, 500);
-    const [isAddOpen, setIsAddOpen] = useState(false);
-    const [isEditOpen, setIsEditOpen] = useState(false);
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-    const [isViewOpen, setIsViewOpen] = useState(false);
-
     const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
 
-    // Column visibility configuration
     const columnConfig: ColumnConfig[] = [
         { id: 'fullName', label: t('tenants.fullName') },
         { id: 'code', label: t('tenants.code') },
@@ -141,46 +96,6 @@ export default function TenantsPage() {
     }));
     const meta = tenantsData?.meta || { total: 0, totalPages: 0 };
 
-    const createMutation = useMutation({
-        mutationFn: tenantsApi.create,
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['tenants'] });
-            setIsAddOpen(false);
-            toast({ title: t('tenants.createSuccess') });
-        },
-        onError: (error: any) => {
-            const message = error?.response?.data?.message;
-            if (message === 'PHONE_EXISTS') {
-                toast({ variant: 'destructive', title: t('tenants.phoneExistsError') });
-            } else if (message === 'ID_CARD_EXISTS') {
-                toast({ variant: 'destructive', title: t('tenants.idCardExistsError') });
-            } else {
-                toast({ variant: 'destructive', title: t('tenants.createError') });
-            }
-        },
-    });
-
-    const updateMutation = useMutation({
-        mutationFn: ({ id, data }: { id: string; data: Partial<TenantFormData> }) =>
-            tenantsApi.update(id, data),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['tenants'] });
-            setIsEditOpen(false);
-            setSelectedTenant(null);
-            toast({ title: t('tenants.updateSuccess') });
-        },
-        onError: (error: any) => {
-            const message = error?.response?.data?.message;
-            if (message === 'PHONE_EXISTS') {
-                toast({ variant: 'destructive', title: t('tenants.phoneExistsError') });
-            } else if (message === 'ID_CARD_EXISTS') {
-                toast({ variant: 'destructive', title: t('tenants.idCardExistsError') });
-            } else {
-                toast({ variant: 'destructive', title: t('tenants.updateError') });
-            }
-        },
-    });
-
     const deleteMutation = useMutation({
         mutationFn: tenantsApi.delete,
         onSuccess: () => {
@@ -193,16 +108,6 @@ export default function TenantsPage() {
             toast({ variant: 'destructive', title: t('tenants.deleteError') });
         },
     });
-
-    const handleView = (tenant: Tenant) => {
-        setSelectedTenant(tenant);
-        setIsViewOpen(true);
-    };
-
-    const handleEdit = (tenant: Tenant) => {
-        setSelectedTenant(tenant);
-        setIsEditOpen(true);
-    };
 
     const handleDelete = (tenant: Tenant) => {
         setSelectedTenant(tenant);
@@ -220,39 +125,17 @@ export default function TenantsPage() {
 
     return (
         <div className="space-y-6">
-            {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">{t('tenants.title')}</h1>
                     <p className="text-muted-foreground">{t('tenants.subtitle')}</p>
                 </div>
-                <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-                    <DialogTrigger asChild>
-                        <Button>
-                            <Plus className="mr-2 h-4 w-4" />
-                            {t('tenants.add')}
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent
-                        className="max-w-2xl"
-                        onPointerDownOutside={(e) => e.preventDefault()}
-                        onEscapeKeyDown={(e) => e.preventDefault()}
-                    >
-
-                        <DialogHeader>
-                            <DialogTitle>{t('tenants.addTitle')}</DialogTitle>
-                            <DialogDescription>{t('tenants.addDescription')}</DialogDescription>
-                        </DialogHeader>
-                        <TenantForm
-                            onSubmit={(data) => createMutation.mutate(data)}
-                            onCancel={() => setIsAddOpen(false)}
-                            isSubmitting={createMutation.isPending}
-                        />
-                    </DialogContent>
-                </Dialog>
+                <Button onClick={() => navigate('/tenants/new')}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    {t('tenants.add')}
+                </Button>
             </div>
 
-            {/* Search */}
             <div className="flex items-center gap-2">
                 <div className="relative flex-1 max-w-sm">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -265,7 +148,6 @@ export default function TenantsPage() {
                 </div>
             </div>
 
-            {/* Table */}
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
                     <div>
@@ -353,10 +235,10 @@ export default function TenantsPage() {
                                         )}
                                         <TableCell>
                                             <div className="flex items-center gap-1">
-                                                <Button variant="ghost" size="icon" onClick={() => handleView(tenant)}>
+                                                <Button variant="ghost" size="icon" onClick={() => navigate(`/tenants/${tenant._id}`)}>
                                                     <Eye className="h-4 w-4" />
                                                 </Button>
-                                                <Button variant="ghost" size="icon" onClick={() => handleEdit(tenant)}>
+                                                <Button variant="ghost" size="icon" onClick={() => navigate(`/tenants/${tenant._id}/edit`)}>
                                                     <Pencil className="h-4 w-4" />
                                                 </Button>
                                                 <Button variant="ghost" size="icon" onClick={() => handleDelete(tenant)} className="text-destructive hover:text-destructive">
@@ -385,51 +267,12 @@ export default function TenantsPage() {
                 </CardContent>
             </Card>
 
-            {/* Edit Dialog */}
-            <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-                <DialogContent
-                    className="max-w-2xl"
-                    onPointerDownOutside={(e) => e.preventDefault()}
-                    onEscapeKeyDown={(e) => e.preventDefault()}
-                >
-
-                    <DialogHeader>
-                        <DialogTitle>{t('tenants.editTitle')}</DialogTitle>
-                        <DialogDescription>{t('tenants.editDescription')}</DialogDescription>
-                    </DialogHeader>
-                    {selectedTenant && (
-                        <TenantForm
-                            key={selectedTenant._id}
-                            defaultValues={{
-                                code: selectedTenant.code,
-                                fullName: selectedTenant.fullName,
-                                email: selectedTenant.email,
-                                phone: selectedTenant.phone,
-                                idNumber: selectedTenant.idNumber,
-                                dateOfBirth: selectedTenant.dateOfBirth ? selectedTenant.dateOfBirth.split('T')[0] : '',
-                                gender: selectedTenant.gender,
-                                address: selectedTenant.address,
-                                occupation: selectedTenant.occupation,
-                                status: selectedTenant.status,
-                                emergencyContact: selectedTenant.emergencyContact,
-                            }}
-                            onSubmit={(data) =>
-                                updateMutation.mutate({ id: selectedTenant._id, data })
-                            }
-                            onCancel={() => setIsEditOpen(false)}
-                            isSubmitting={updateMutation.isPending}
-                        />
-                    )}
-                </DialogContent>
-            </Dialog>
-
             {/* Delete Dialog */}
             <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
                 <DialogContent
                     onPointerDownOutside={(e) => e.preventDefault()}
                     onEscapeKeyDown={(e) => e.preventDefault()}
                 >
-
                     <DialogHeader>
                         <DialogTitle>{t('tenants.deleteTitle')}</DialogTitle>
                         <DialogDescription>
@@ -450,165 +293,6 @@ export default function TenantsPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-
-            {/* View Dialog */}
-            <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-                <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                        <div className="flex items-center gap-3">
-                            <Avatar className="h-10 w-10">
-                                <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                                    {selectedTenant?.fullName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
-                                </AvatarFallback>
-                            </Avatar>
-                            <div>
-                                <DialogTitle>{selectedTenant?.fullName}</DialogTitle>
-                                <DialogDescription>{selectedTenant?.code}</DialogDescription>
-                            </div>
-                        </div>
-                    </DialogHeader>
-                    <Tabs defaultValue="info" className="flex-1 overflow-hidden flex flex-col">
-                        <div className="px-6">
-                            <TabsList className="grid w-full grid-cols-2">
-                                <TabsTrigger value="info">{t('tenants.info')}</TabsTrigger>
-                                <TabsTrigger value="history">{t('tenants.history.title')}</TabsTrigger>
-                            </TabsList>
-                        </div>
-                        <TabsContent value="info" className="mt-0">
-                            <DialogBody>
-                                {selectedTenant && (
-                                    <div className="space-y-5">
-                                        {/* Contact Section */}
-                                        <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-                                            <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                                                <Phone className="h-3.5 w-3.5" />
-                                                {t('tenants.contact') || 'Contact'}
-                                            </h4>
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <p className="text-xs text-muted-foreground">{t('tenants.phone')}</p>
-                                                    <p className="text-sm font-medium">{formatPhoneNumber(selectedTenant.phone)}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs text-muted-foreground">{t('tenants.email')}</p>
-                                                    <p className="text-sm font-medium">{selectedTenant.email || '-'}</p>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Personal Info Section */}
-                                        <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-                                            <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                                                <Shield className="h-3.5 w-3.5" />
-                                                {t('tenants.personalInfo') || 'Personal Info'}
-                                            </h4>
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <p className="text-xs text-muted-foreground">{t('tenants.idNumber')}</p>
-                                                    <p className="text-sm font-medium">{selectedTenant.idNumber || '-'}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs text-muted-foreground">{t('tenants.dateOfBirth')}</p>
-                                                    <p className="text-sm font-medium">
-                                                        {selectedTenant.dateOfBirth
-                                                            ? new Date(selectedTenant.dateOfBirth).toLocaleDateString()
-                                                            : '-'}
-                                                    </p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs text-muted-foreground">{t('tenants.gender')}</p>
-                                                    <p className="text-sm font-medium">
-                                                        {selectedTenant.gender === 'MALE' ? t('tenants.genderMale')
-                                                            : selectedTenant.gender === 'FEMALE' ? t('tenants.genderFemale')
-                                                                : selectedTenant.gender === 'OTHER' ? t('tenants.genderOther') : '-'}
-                                                    </p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs text-muted-foreground">{t('tenants.occupation')}</p>
-                                                    <p className="text-sm font-medium">{selectedTenant.occupation || '-'}</p>
-                                                </div>
-                                                <div className="col-span-2">
-                                                    <p className="text-xs text-muted-foreground">{t('tenants.address')}</p>
-                                                    <p className="text-sm font-medium">{selectedTenant.address || '-'}</p>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Status Section */}
-                                        <div className="rounded-lg border bg-muted/30 p-4">
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <p className="text-xs text-muted-foreground">{t('common.status')}</p>
-                                                    <Badge
-                                                        className={
-                                                            `mt-1 ${selectedTenant.status === 'RENTING' ? 'bg-blue-500 hover:bg-blue-600' :
-                                                                selectedTenant.status === 'ACTIVE' ? 'bg-green-500 hover:bg-green-600' :
-                                                                    selectedTenant.status === 'DEPOSITED' ? 'bg-orange-500 hover:bg-orange-600' :
-                                                                        'bg-gray-500 hover:bg-gray-600'}`
-                                                        }
-                                                    >
-                                                        {selectedTenant.status === 'RENTING' ? t('tenants.statusRenting') :
-                                                            selectedTenant.status === 'ACTIVE' ? t('tenants.statusActive') :
-                                                                selectedTenant.status === 'DEPOSITED' ? t('tenants.statusDeposited') : t('tenants.statusClosed')}
-                                                    </Badge>
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs text-muted-foreground">{t('tenants.createdAt')}</p>
-                                                    <p className="text-sm font-medium mt-1">{new Date(selectedTenant.createdAt).toLocaleDateString()}</p>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Emergency Contact Section */}
-                                        {selectedTenant.emergencyContact && (
-                                            <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-4 space-y-3">
-                                                <h4 className="text-sm font-medium text-orange-400 flex items-center gap-2">
-                                                    <AlertTriangle className="h-3.5 w-3.5" />
-                                                    {t('tenants.emergencyContact')}
-                                                </h4>
-                                                <div className="grid grid-cols-3 gap-3">
-                                                    <div>
-                                                        <p className="text-xs text-muted-foreground">{t('tenants.ecName')}</p>
-                                                        <p className="text-sm font-medium">{selectedTenant.emergencyContact.name || '-'}</p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-xs text-muted-foreground">{t('tenants.ecPhone')}</p>
-                                                        <p className="text-sm font-medium">{selectedTenant.emergencyContact.phone || '-'}</p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-xs text-muted-foreground">{t('tenants.ecRelationship')}</p>
-                                                        <p className="text-sm font-medium">{selectedTenant.emergencyContact.relationship || '-'}</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </DialogBody>
-                        </TabsContent>
-                        <TabsContent value="history" className="mt-0">
-                            <DialogBody>
-                                {selectedTenant && (
-                                    <div className="space-y-4">
-                                        <TenantHistoryTimeline tenantId={selectedTenant._id} />
-                                        <div className="text-center">
-                                            <Button
-                                                variant="link"
-                                                onClick={() => {
-                                                    setIsViewOpen(false);
-                                                    navigate(`/tenants/${selectedTenant._id}/history`);
-                                                }}
-                                            >
-                                                {t('tenants.history.viewAll')}
-                                            </Button>
-                                        </div>
-                                    </div>
-                                )}
-                            </DialogBody>
-                        </TabsContent>
-                    </Tabs>
-                </DialogContent>
-            </Dialog>
-        </div >
+        </div>
     );
 }

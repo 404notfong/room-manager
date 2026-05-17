@@ -1,7 +1,7 @@
 import apiClient from '@/api/client';
 import BuildingSelector from '@/components/BuildingSelector';
 import { Button } from '@/components/ui/button';
-import { DialogBody, DialogFooter } from '@/components/ui/dialog';
+import { Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NumberInput } from '@/components/ui/number-input';
@@ -29,12 +29,13 @@ export type RoomFormData = z.infer<ReturnType<typeof useRoomSchema>>;
 interface RoomFormProps {
     defaultValues?: Partial<RoomFormData>;
     onSubmit: (data: RoomFormData) => void;
-    onCancel: () => void;
+    onCancel?: () => void;
     isSubmitting?: boolean;
     isEditing?: boolean;
     roomCode?: string;
     preselectedBuildingId?: string | null;
-    currentStatus?: string; // For handling OCCUPIED status display
+    currentStatus?: string;
+    formId?: string;
 }
 
 export default function RoomForm({
@@ -46,6 +47,7 @@ export default function RoomForm({
     roomCode,
     preselectedBuildingId,
     currentStatus,
+    formId,
 }: RoomFormProps) {
     const [isCustomTerm, setIsCustomTerm] = useState(false);
     const { t } = useTranslation();
@@ -176,15 +178,15 @@ export default function RoomForm({
     };
 
     return (
-        <form onSubmit={handleSubmit(onSubmit, (errors) => {
+        <form id={formId} onSubmit={handleSubmit(onSubmit, (errors) => {
             console.error('Form Validation Errors:', errors);
             toast({
                 variant: 'destructive',
                 title: t('validation.error'),
                 description: t('validation.checkFields'),
             });
-        })} className="flex flex-col flex-1 overflow-hidden">
-            <DialogBody>
+        })} className="space-y-6">
+            <div>
                 <div className="space-y-4">
                     {/* Basic Info Section */}
                     <div className="grid grid-cols-2 gap-4">
@@ -904,16 +906,21 @@ export default function RoomForm({
                         />
                     </div>
                 </div>
-            </DialogBody>
+            </div>
 
-            <DialogFooter>
-                <Button type="button" variant="outline" onClick={onCancel}>
-                    {t('common.cancel')}
-                </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                    {t('common.save')}
-                </Button>
-            </DialogFooter>
+            {!formId && (
+                <div className="flex justify-end gap-3 pt-4 border-t">
+                    {onCancel && (
+                        <Button type="button" variant="outline" onClick={onCancel}>
+                            {t('common.cancel')}
+                        </Button>
+                    )}
+                    <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {t('common.save')}
+                    </Button>
+                </div>
+            )}
         </form>
     );
 }

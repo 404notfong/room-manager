@@ -20,9 +20,10 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Calendar, Droplets, Eye, FileText, Pencil, Plus, Search, Trash2, Zap } from 'lucide-react';
+import { Calendar, Droplets, Eye, FileText, Pencil, Plus, Search, Trash2, XCircle, Zap } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import apiClient from '@/api/client';
 import { ColumnVisibilityToggle } from '@/components/ColumnVisibilityToggle';
@@ -46,7 +47,7 @@ interface Contract {
     waterPrice?: number;
     initialElectricIndex?: number;
     initialWaterIndex?: number;
-    contractType?: 'LONG_TERM' | 'SHORT_TERM'; // Made optional as roomType might be used
+    contractType?: 'LONG_TERM' | 'SHORT_TERM';
     roomType?: 'LONG_TERM' | 'SHORT_TERM';
     shortTermPricingType?: 'HOURLY' | 'DAILY' | 'FIXED';
     hourlyPricingMode?: 'PER_HOUR' | 'TABLE';
@@ -66,14 +67,6 @@ const contractsApi = {
         const response = await apiClient.get('/contracts', { params });
         return response.data;
     },
-    create: async (data: Partial<Contract>) => {
-        const response = await apiClient.post('/contracts', data);
-        return response.data;
-    },
-    update: async (id: string, data: Partial<Contract>) => {
-        const response = await apiClient.put(`/contracts/${id}`, data);
-        return response.data;
-    },
     delete: async (id: string) => {
         const response = await apiClient.delete(`/contracts/${id}`);
         return response.data;
@@ -85,19 +78,16 @@ const contractsApi = {
 };
 
 import { ActivateContractDialog } from '@/components/ActivateContractDialog';
-import ContractViewModal from '@/components/ContractViewModal';
-import ContractForm from './ContractForm';
 
 export default function ContractsPage() {
     const { t } = useTranslation();
+    const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { selectedBuildingId } = useBuildingStore();
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearchTerm = useDebounce(searchTerm, 500);
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-    const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [isActivateOpen, setIsActivateOpen] = useState(false);
-    const [isViewOpen, setIsViewOpen] = useState(false);
     const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
@@ -162,11 +152,6 @@ export default function ContractsPage() {
         setIsActivateOpen(true);
     };
 
-    const handleViewContract = (contract: Contract) => {
-        setSelectedContract(contract);
-        setIsViewOpen(true);
-    };
-
     const handleDelete = (contract: Contract) => {
         setSelectedContract(contract);
         setIsDeleteOpen(true);
@@ -187,15 +172,12 @@ export default function ContractsPage() {
         }
     };
 
-
-
     const formatCurrency = (amount: number | undefined) => {
         if (amount === undefined || amount === null) return '-';
         return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
     };
 
     const getContractTypeBadge = (roomType: string | undefined, contractType: string | undefined) => {
-        // roomType is the definitive Long/Short term indicator
         if (roomType === 'LONG_TERM' || contractType === 'LONG_TERM') {
             return <Badge variant="outline" className="bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 border-0">{t('contracts.roomTypeLongTerm')}</Badge>;
         }
@@ -300,10 +282,7 @@ export default function ContractsPage() {
                     <h1 className="text-3xl font-bold tracking-tight">{t('contracts.title')}</h1>
                     <p className="text-muted-foreground">{t('contracts.subtitle')}</p>
                 </div>
-                <Button onClick={() => {
-                    setSelectedContract(null);
-                    setIsCreateOpen(true);
-                }}>
+                <Button onClick={() => navigate('/contracts/new')}>
                     <Plus className="mr-2 h-4 w-4" />
                     {t('contracts.add')}
                 </Button>
@@ -363,7 +342,7 @@ export default function ContractsPage() {
                                         {columnVisibility.isVisible('code') && (
                                             <TableCell
                                                 className="font-mono text-xs font-medium cursor-pointer hover:text-primary hover:underline"
-                                                onClick={() => handleViewContract(contract)}
+                                                onClick={() => navigate(`/contracts/${contract._id}`)}
                                             >
                                                 {contract.contractCode || '-'}
                                             </TableCell>
@@ -424,15 +403,17 @@ export default function ContractsPage() {
                                         )}
                                         <TableCell>
                                             <div className="flex items-center gap-1">
-                                                <Button variant="ghost" size="icon" onClick={() => handleViewContract(contract)} title={t('common.view')}>
+                                                <Button variant="ghost" size="icon" onClick={() => navigate(`/contracts/${contract._id}`)} title={t('common.view')}>
                                                     <Eye className="h-4 w-4" />
                                                 </Button>
-                                                <Button variant="ghost" size="icon" onClick={() => {
-                                                    setSelectedContract(contract);
-                                                    setIsCreateOpen(true);
-                                                }}>
+                                                <Button variant="ghost" size="icon" onClick={() => navigate(`/contracts/${contract._id}/edit`)}>
                                                     <Pencil className="h-4 w-4" />
                                                 </Button>
+                                                {contract.status === 'ACTIVE' && (
+                                                    <Button variant="ghost" size="icon" onClick={() => navigate(`/contracts/${contract._id}/terminate`)} className="text-red-500 hover:text-red-600" title={t('contracts.terminate')}>
+                                                        <XCircle className="h-4 w-4" />
+                                                    </Button>
+                                                )}
                                                 {contract.status === 'DRAFT' && (
                                                     <>
                                                         <Button variant="ghost" size="icon" onClick={() => handleActivate(contract)} className="text-blue-600 hover:text-blue-600">
@@ -492,12 +473,6 @@ export default function ContractsPage() {
                 </DialogContent>
             </Dialog>
 
-            <ContractForm
-                open={isCreateOpen}
-                onOpenChange={setIsCreateOpen}
-                contract={selectedContract && isCreateOpen ? selectedContract : undefined}
-            />
-
             {selectedContract && (
                 <ActivateContractDialog
                     isOpen={isActivateOpen}
@@ -513,13 +488,6 @@ export default function ContractsPage() {
                     isSubmitting={activateMutation.isPending}
                 />
             )}
-
-            {/* View Contract Modal */}
-            <ContractViewModal
-                open={isViewOpen}
-                onOpenChange={setIsViewOpen}
-                contract={selectedContract}
-            />
         </div>
     );
 }

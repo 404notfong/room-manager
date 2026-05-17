@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, Wrench, Search } from 'lucide-react';
@@ -21,12 +22,10 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import apiClient from '@/api/client';
 import Pagination from '@/components/Pagination';
-import ServiceForm, { ServiceFormData } from '@/components/forms/ServiceForm';
 import { PriceTablePopover } from '@/components/PriceTablePopover';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useColumnVisibility, ColumnConfig } from '@/hooks/useColumnVisibility';
@@ -52,17 +51,14 @@ interface Service {
     createdAt: string;
 }
 
+interface Building {
+    _id: string;
+    name: string;
+}
+
 const servicesApi = {
     getAll: async (params: { page: number; limit: number; search?: string }) => {
         const response = await apiClient.get('/services', { params });
-        return response.data;
-    },
-    create: async (data: ServiceFormData) => {
-        const response = await apiClient.post('/services', data);
-        return response.data;
-    },
-    update: async (id: string, data: Partial<ServiceFormData>) => {
-        const response = await apiClient.put(`/services/${id}`, data);
         return response.data;
     },
     delete: async (id: string) => {
@@ -73,17 +69,15 @@ const servicesApi = {
 
 export default function ServicesPage() {
     const { t } = useTranslation();
+    const navigate = useNavigate();
     const queryClient = useQueryClient();
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearchTerm = useDebounce(searchTerm, 500);
-    const [isAddOpen, setIsAddOpen] = useState(false);
-    const [isEditOpen, setIsEditOpen] = useState(false);
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
     const [selectedService, setSelectedService] = useState<Service | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
 
-    // Column visibility configuration
     const columnConfig: ColumnConfig[] = [
         { id: 'name', label: t('services.name') },
         { id: 'code', label: t('services.code') },
@@ -96,41 +90,11 @@ export default function ServicesPage() {
 
     const { data: servicesData, isLoading } = useQuery({
         queryKey: ['services', { page: currentPage, limit: pageSize, search: debouncedSearchTerm }],
-        queryFn: () => servicesApi.getAll({
-            page: currentPage,
-            limit: pageSize,
-            search: debouncedSearchTerm
-        }),
+        queryFn: () => servicesApi.getAll({ page: currentPage, limit: pageSize, search: debouncedSearchTerm }),
     });
 
     const services: Service[] = Array.isArray(servicesData?.data) ? servicesData.data : [];
     const meta = servicesData?.meta || { total: 0, totalPages: 0 };
-
-    const createMutation = useMutation({
-        mutationFn: (data: ServiceFormData) => servicesApi.create(data),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['services'] });
-            setIsAddOpen(false);
-            toast({ title: t('services.createSuccess') });
-        },
-        onError: () => {
-            toast({ variant: 'destructive', title: t('services.createError') });
-        },
-    });
-
-    const updateMutation = useMutation({
-        mutationFn: ({ id, data }: { id: string; data: Partial<ServiceFormData> }) =>
-            servicesApi.update(id, data),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['services'] });
-            setIsEditOpen(false);
-            setSelectedService(null);
-            toast({ title: t('services.updateSuccess') });
-        },
-        onError: () => {
-            toast({ variant: 'destructive', title: t('services.updateError') });
-        },
-    });
 
     const deleteMutation = useMutation({
         mutationFn: servicesApi.delete,
@@ -145,11 +109,6 @@ export default function ServicesPage() {
         },
     });
 
-    const handleEdit = (service: Service) => {
-        setSelectedService(service);
-        setIsEditOpen(true);
-    };
-
     const handleDelete = (service: Service) => {
         setSelectedService(service);
         setIsDeleteOpen(true);
@@ -163,11 +122,6 @@ export default function ServicesPage() {
         setSearchTerm(value);
         setCurrentPage(1);
     };
-
-    interface Building {
-        _id: string;
-        name: string;
-    }
 
     const { data: buildings = [] } = useQuery({
         queryKey: ['buildings'],
@@ -184,39 +138,17 @@ export default function ServicesPage() {
 
     return (
         <div className="space-y-6">
-            {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">{t('services.title')}</h1>
                     <p className="text-muted-foreground">{t('services.subtitle')}</p>
                 </div>
-                <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-                    <DialogTrigger asChild>
-                        <Button>
-                            <Plus className="mr-2 h-4 w-4" />
-                            {t('services.add')}
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent
-                        className="max-w-2xl max-h-[90vh] overflow-y-auto"
-                        onPointerDownOutside={(e) => e.preventDefault()}
-                        onEscapeKeyDown={(e) => e.preventDefault()}
-                    >
-
-                        <DialogHeader>
-                            <DialogTitle>{t('services.addTitle')}</DialogTitle>
-                            <DialogDescription>{t('services.addDescription')}</DialogDescription>
-                        </DialogHeader>
-                        <ServiceForm
-                            onSubmit={(data) => createMutation.mutate(data)}
-                            onCancel={() => setIsAddOpen(false)}
-                            isSubmitting={createMutation.isPending}
-                        />
-                    </DialogContent>
-                </Dialog>
+                <Button onClick={() => navigate('/services/new')}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    {t('services.add')}
+                </Button>
             </div>
 
-            {/* Search */}
             <div className="flex items-center gap-2">
                 <div className="relative flex-1 max-w-sm">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -229,7 +161,6 @@ export default function ServicesPage() {
                 </div>
             </div>
 
-            {/* Table */}
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
                     <div>
@@ -314,7 +245,7 @@ export default function ServicesPage() {
                                         )}
                                         <TableCell>
                                             <div className="flex items-center gap-1">
-                                                <Button variant="ghost" size="icon" onClick={() => handleEdit(service)}>
+                                                <Button variant="ghost" size="icon" onClick={() => navigate(`/services/${service._id}/edit`)}>
                                                     <Pencil className="h-4 w-4" />
                                                 </Button>
                                                 <Button variant="ghost" size="icon" onClick={() => handleDelete(service)} className="text-destructive hover:text-destructive">
@@ -343,51 +274,12 @@ export default function ServicesPage() {
                 </CardContent>
             </Card>
 
-            {/* Edit Dialog */}
-            < Dialog open={isEditOpen} onOpenChange={setIsEditOpen} >
-                <DialogContent
-                    className="max-w-2xl max-h-[90vh] overflow-y-auto"
-                    onPointerDownOutside={(e) => e.preventDefault()}
-                    onEscapeKeyDown={(e) => e.preventDefault()}
-                >
-
-                    <DialogHeader>
-                        <DialogTitle>{t('services.editTitle')}</DialogTitle>
-                        <DialogDescription>{t('services.editDescription')}</DialogDescription>
-                    </DialogHeader>
-                    {selectedService && (
-                        <ServiceForm
-                            key={selectedService._id}
-                            defaultValues={{
-                                name: selectedService.name,
-                                unit: selectedService.unit,
-                                priceType: selectedService.priceType,
-                                fixedPrice: selectedService.fixedPrice,
-                                priceTiers: selectedService.priceTiers,
-                                buildingScope: selectedService.buildingScope,
-                                // Handle both populated (object) and unpopulated (string) buildingIds
-                                buildingIds: selectedService.buildingIds?.map(b =>
-                                    typeof b === 'string' ? b : b._id
-                                ) || [],
-                                isActive: selectedService.isActive,
-                            }}
-                            onSubmit={(data: ServiceFormData) =>
-                                updateMutation.mutate({ id: selectedService._id, data })
-                            }
-                            onCancel={() => setIsEditOpen(false)}
-                            isSubmitting={updateMutation.isPending}
-                        />
-                    )}
-                </DialogContent>
-            </Dialog >
-
             {/* Delete Dialog */}
-            < Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen} >
+            <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
                 <DialogContent
                     onPointerDownOutside={(e) => e.preventDefault()}
                     onEscapeKeyDown={(e) => e.preventDefault()}
                 >
-
                     <DialogHeader>
                         <DialogTitle>{t('services.deleteTitle')}</DialogTitle>
                         <DialogDescription>
@@ -407,7 +299,7 @@ export default function ServicesPage() {
                         </Button>
                     </DialogFooter>
                 </DialogContent>
-            </Dialog >
-        </div >
+            </Dialog>
+        </div>
     );
 }

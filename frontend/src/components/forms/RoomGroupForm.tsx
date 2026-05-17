@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { DialogBody, DialogFooter } from '@/components/ui/dialog';
+import { Loader2 } from 'lucide-react';
 import {
     Select,
     SelectContent,
@@ -22,10 +22,11 @@ export type RoomGroupFormData = z.infer<ReturnType<typeof useRoomGroupSchema>>;
 interface RoomGroupFormProps {
     defaultValues?: Partial<RoomGroupFormData>;
     onSubmit: (data: RoomGroupFormData) => void;
-    onCancel: () => void;
+    onCancel?: () => void;
     isSubmitting?: boolean;
     isEditing?: boolean;
     preselectedBuildingId?: string | null;
+    formId?: string;
 }
 
 const COLORS = [
@@ -46,6 +47,7 @@ export default function RoomGroupForm({
     isSubmitting = false,
     isEditing = false,
     preselectedBuildingId,
+    formId,
 }: RoomGroupFormProps) {
     const { t } = useTranslation();
     const schema = useRoomGroupSchema();
@@ -102,8 +104,8 @@ export default function RoomGroupForm({
     const selectedBuildingName = buildings.find((b: any) => b._id === initialBuildingId)?.name;
 
     return (
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
-            <DialogBody>
+        <form id={formId} onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            <div>
                 <div className="space-y-4">
                     {defaultValues?.code && (
                         <div className="space-y-2">
@@ -190,16 +192,21 @@ export default function RoomGroupForm({
                         </div>
                     </div>
                 </div>
-            </DialogBody>
+            </div>
 
-            <DialogFooter>
-                <Button type="button" variant="outline" onClick={onCancel}>
-                    {t('common.cancel')}
-                </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                    {t('common.save')}
-                </Button>
-            </DialogFooter>
+            {!formId && (
+                <div className="flex justify-end gap-3 pt-4 border-t">
+                    {onCancel && (
+                        <Button type="button" variant="outline" onClick={onCancel}>
+                            {t('common.cancel')}
+                        </Button>
+                    )}
+                    <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {t('common.save')}
+                    </Button>
+                </div>
+            )}
         </form>
     );
 }

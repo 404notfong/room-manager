@@ -64,6 +64,7 @@ export enum PaymentMethod {
     BANK_TRANSFER = 'BANK_TRANSFER',
     MOMO = 'MOMO',
     ZALOPAY = 'ZALOPAY',
+    DEPOSIT_DEDUCTION = 'DEPOSIT_DEDUCTION',
     OTHER = 'OTHER',
 }
 

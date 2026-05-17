@@ -2,6 +2,7 @@ import { ContractsController } from '@modules/contracts/contracts.controller';
 import { ContractsService } from '@modules/contracts/contracts.service';
 import { Contract, ContractSchema } from '@modules/contracts/schemas/contract.schema';
 import { Invoice, InvoiceSchema } from '@modules/invoices/schemas/invoice.schema';
+import { Payment, PaymentSchema } from '@modules/payments/schemas/payment.schema';
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
@@ -14,6 +15,7 @@ import { TenantsModule } from '@modules/tenants/tenants.module';
         MongooseModule.forFeature([
             { name: Contract.name, schema: ContractSchema },
             { name: Invoice.name, schema: InvoiceSchema },
+            { name: Payment.name, schema: PaymentSchema },
         ]),
         RoomsModule,
         TenantsModule,

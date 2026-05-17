@@ -1,9 +1,10 @@
-﻿import { zodResolver } from '@hookform/resolvers/zod';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { addHours, differenceInDays, differenceInHours, isSameDay, startOfDay } from 'date-fns';
 import {
     AlertTriangle,
     Clock,
+    Edit2,
     Loader2,
     Package,
     Plus,
@@ -71,6 +72,12 @@ interface Adjustment {
     isDiscount: boolean;
 }
 
+interface ServiceCharge {
+    name: string;
+    amount: number;
+    quantity: number;
+}
+
 interface ShortTermPriceTier {
     fromValue: number;
     toValue: number;
@@ -83,6 +90,7 @@ interface CreateShortTermInvoiceModalProps {
     contract: any;
     room?: any;
     onSuccess?: () => void;
+    renderAsPage?: boolean;
 }
 
 const invoicesApi = {
@@ -211,7 +219,8 @@ export default function CreateShortTermInvoiceModal({
     onOpenChange, 
     contract, 
     room,
-    onSuccess 
+    onSuccess,
+    renderAsPage = false 
 }: CreateShortTermInvoiceModalProps) {
     const { t } = useTranslation();
     const { toast } = useToast();
@@ -221,6 +230,8 @@ export default function CreateShortTermInvoiceModal({
     const [autoCalculate, setAutoCalculate] = useState(true);
     const [manualHours, setManualHours] = useState<number>(0);
     const [manualDays, setManualDays] = useState<number>(0);
+    const [serviceCharges, setServiceCharges] = useState<ServiceCharge[]>([]);
+    const [editingServiceIndex, setEditingServiceIndex] = useState<number | null>(null);
 
     // Round minutes down to nearest 5-minute step for DateTimePicker compatibility
     const roundToStep5 = (date: Date): Date => {
@@ -270,6 +281,16 @@ export default function CreateShortTermInvoiceModal({
             setAutoCalculate(true);
             setManualHours(0);
             setManualDays(0);
+            // Initialize service charges from contract
+            const contractServices = (contract.serviceCharges || [])
+                .filter((s: any) => s.isRecurring !== false)
+                .map((s: any) => ({
+                    name: s.name,
+                    amount: s.amount || 0,
+                    quantity: s.quantity || 1,
+                }));
+            setServiceCharges(contractServices);
+            setEditingServiceIndex(null);
         }
     }, [open, contract?._id]);
 
@@ -312,10 +333,9 @@ export default function CreateShortTermInvoiceModal({
 
         const result = calculateShortTermAmount(contract, totalHours, totalDays, t);
         
-        // Service charges
-        const serviceTotal = (contract.serviceCharges || [])
-            .filter((s: any) => s.isRecurring !== false)
-            .reduce((sum: number, s: any) => sum + (s.amount * (s.quantity || 1)), 0);
+        // Service charges from editable list
+        const serviceTotal = serviceCharges.reduce((sum, s) =>
+            sum + (s.amount * (s.quantity || 1)), 0);
 
         // Adjustments
         const adjustmentTotal = adjustments.reduce((sum, adj) => {
@@ -335,7 +355,7 @@ export default function CreateShortTermInvoiceModal({
             depositAmount,
             total: Math.max(0, result.amount + serviceTotal + adjustmentTotal - depositAmount)
         };
-    }, [contract, autoDuration, autoCalculate, manualHours, manualDays, adjustments]);
+    }, [contract, autoDuration, autoCalculate, manualHours, manualDays, adjustments, serviceCharges]);
 
     // Create mutation
     const createMutation = useMutation({
@@ -377,7 +397,7 @@ export default function CreateShortTermInvoiceModal({
             totalHours: calculations.totalHours,
             totalDays: calculations.totalDays,
             rentAmount: calculations.rentAmount,
-            serviceCharges: contract.serviceCharges?.filter((s: any) => s.isRecurring !== false) || [],
+            serviceCharges: serviceCharges,
             adjustments: adjustments,
             dueDate: data.dueDate,
             notes: data.notes || '',
@@ -407,6 +427,23 @@ export default function CreateShortTermInvoiceModal({
         setAdjustments(adjustments.filter((_, i) => i !== index));
     };
 
+    // Service management
+    const handleAddService = () => {
+        setServiceCharges([...serviceCharges, { name: '', amount: 0, quantity: 1 }]);
+        setEditingServiceIndex(serviceCharges.length);
+    };
+
+    const handleRemoveService = (index: number) => {
+        setServiceCharges(serviceCharges.filter((_, i) => i !== index));
+        if (editingServiceIndex === index) setEditingServiceIndex(null);
+    };
+
+    const handleUpdateService = (index: number, field: keyof ServiceCharge, value: string | number) => {
+        const updated = [...serviceCharges];
+        updated[index] = { ...updated[index], [field]: value };
+        setServiceCharges(updated);
+    };
+
     const getPricingTypeLabel = () => {
         switch (contract?.shortTermPricingType) {
             case 'HOURLY': return t('invoices.pricingHourly');
@@ -418,19 +455,8 @@ export default function CreateShortTermInvoiceModal({
 
     if (!contract) return null;
 
-    return (
-        <>
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-5xl">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <Receipt className="h-5 w-5 text-emerald-600" />
-                        {t('invoices.shortTermTitle')}
-                    </DialogTitle>
-                </DialogHeader>
-
-                <DialogBody>
-                <Form {...form}>
+    const formContent = (
+        <Form {...form}>
                     <form id="create-short-term-invoice-form" onSubmit={form.handleSubmit(onSubmit)}>
                         {/* Contract Info - full width */}
                         <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-3 mb-4">
@@ -614,34 +640,126 @@ export default function CreateShortTermInvoiceModal({
 
                             {/* RIGHT COLUMN: Services, Adjustments, Summary */}
                             <div className="space-y-4">
-                                {/* Services */}
-                                {contract.serviceCharges?.length > 0 && (
-                                    <div className="border rounded-lg p-4 space-y-2">
+                                {/* Services (Editable) */}
+                                <div className="border rounded-lg p-4 space-y-3">
+                                    <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
                                             <Package className="h-4 w-4 text-purple-500" />
                                             <h3 className="font-medium text-sm">{t('invoices.services')}</h3>
                                         </div>
-                                        {contract.serviceCharges
-                                            .filter((s: any) => s.isRecurring !== false)
-                                            .map((service: any, index: number) => (
-                                            <div key={index} className="flex justify-between text-sm">
-                                                <div className="flex flex-col">
-                                                    <span className="text-xs">{service.name} {service.quantity > 1 && `x${service.quantity}`}</span>
-                                                    {service.quantity > 1 && (
-                                                        <span className="text-xs text-muted-foreground">
-                                                            {formatCurrency(service.amount)}/{t('invoices.eachPrice')}
-                                                        </span>
-                                                    )}
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 text-xs"
+                                            onClick={handleAddService}
+                                        >
+                                            <Plus className="h-3 w-3 mr-1" />
+                                            {t('common.add')}
+                                        </Button>
+                                    </div>
+
+                                    {serviceCharges.length === 0 && (
+                                        <p className="text-xs text-muted-foreground text-center py-2">{t('contracts.noServices')}</p>
+                                    )}
+
+                                    {serviceCharges.map((service, index) => (
+                                        <div key={index} className="bg-slate-50 dark:bg-slate-800 rounded-lg p-2.5 space-y-2">
+                                            {editingServiceIndex === index ? (
+                                                /* Edit mode */
+                                                <div className="space-y-2">
+                                                    <div className="flex gap-2">
+                                                        <div className="flex-1">
+                                                            <Label className="text-xs">{t('contracts.serviceName')}</Label>
+                                                            <Input
+                                                                value={service.name}
+                                                                onChange={e => handleUpdateService(index, 'name', e.target.value)}
+                                                                placeholder={t('contracts.serviceName')}
+                                                                className="mt-1"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <div className="w-24">
+                                                            <Label className="text-xs">{t('common.quantity')}</Label>
+                                                            <Input
+                                                                type="number"
+                                                                min={1}
+                                                                value={service.quantity}
+                                                                onChange={e => handleUpdateService(index, 'quantity', Math.max(1, parseInt(e.target.value) || 1))}
+                                                                className="mt-1"
+                                                            />
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <Label className="text-xs">{t('contracts.serviceAmount')}</Label>
+                                                            <Input
+                                                                type="text"
+                                                                inputMode="numeric"
+                                                                value={service.amount ? formatCurrency(service.amount) : ''}
+                                                                onChange={e => {
+                                                                    const raw = e.target.value.replace(/[^0-9]/g, '');
+                                                                    handleUpdateService(index, 'amount', Number(raw));
+                                                                }}
+                                                                className="mt-1"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex justify-end">
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-7 text-xs"
+                                                            onClick={() => setEditingServiceIndex(null)}
+                                                        >
+                                                            {t('common.done')}
+                                                        </Button>
+                                                    </div>
                                                 </div>
-                                                <span className="font-medium text-sm">{formatCurrency(service.amount * (service.quantity || 1))}</span>
-                                            </div>
-                                        ))}
+                                            ) : (
+                                                /* Display mode */
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-sm">{service.name || t('contracts.serviceName')}</span>
+                                                        {service.quantity > 1 && (
+                                                            <span className="text-xs text-muted-foreground">
+                                                                {formatCurrency(service.amount)} x {service.quantity}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="font-medium text-sm">{formatCurrency(service.amount * service.quantity)}</span>
+                                                        <Button 
+                                                            type="button" 
+                                                            variant="ghost" 
+                                                            size="sm"
+                                                            className="h-7 w-7 p-0"
+                                                            onClick={() => setEditingServiceIndex(index)}
+                                                        >
+                                                            <Edit2 className="h-3 w-3 text-muted-foreground" />
+                                                        </Button>
+                                                        <Button 
+                                                            type="button" 
+                                                            variant="ghost" 
+                                                            size="sm"
+                                                            className="h-7 w-7 p-0"
+                                                            onClick={() => handleRemoveService(index)}
+                                                        >
+                                                            <Trash2 className="h-3 w-3 text-red-500" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+
+                                    {serviceCharges.length > 0 && (
                                         <div className="border-t pt-2 flex justify-between font-medium text-sm">
                                             <span>{t('invoices.subtotal')}</span>
                                             <span>{formatCurrency(calculations.serviceTotal)}</span>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
 
                                 {/* Adjustments */}
                                 <div className="border rounded-lg p-4 space-y-2">
@@ -682,7 +800,6 @@ export default function CreateShortTermInvoiceModal({
                                                 placeholder={t('invoices.adjustmentPlaceholder')}
                                                 value={newAdjustment.description}
                                                 onChange={(e) => setNewAdjustment({ ...newAdjustment, description: e.target.value })}
-                                                className="h-8 text-xs"
                                             />
                                         </div>
                                         <div className="w-28">
@@ -696,7 +813,6 @@ export default function CreateShortTermInvoiceModal({
                                                     const raw = e.target.value.replace(/[^0-9]/g, '');
                                                     setNewAdjustment({ ...newAdjustment, amount: Number(raw) });
                                                 }}
-                                                className="h-8 text-xs"
                                             />
                                         </div>
                                         <div className="flex gap-1">
@@ -704,7 +820,7 @@ export default function CreateShortTermInvoiceModal({
                                                 type="button"
                                                 variant={newAdjustment.isDiscount ? "default" : "outline"}
                                                 size="sm"
-                                                className={cn("h-8 w-8 p-0", newAdjustment.isDiscount && "bg-green-600 hover:bg-green-700")}
+                                                className={cn("h-10 w-10 p-0", newAdjustment.isDiscount && "bg-green-600 hover:bg-green-700")}
                                                 onClick={() => setNewAdjustment({ ...newAdjustment, isDiscount: true })}
                                             >
                                                 -
@@ -713,7 +829,7 @@ export default function CreateShortTermInvoiceModal({
                                                 type="button"
                                                 variant={!newAdjustment.isDiscount ? "default" : "outline"}
                                                 size="sm"
-                                                className={cn("h-8 w-8 p-0", !newAdjustment.isDiscount && "bg-red-600 hover:bg-red-700")}
+                                                className={cn("h-10 w-10 p-0", !newAdjustment.isDiscount && "bg-red-600 hover:bg-red-700")}
                                                 onClick={() => setNewAdjustment({ ...newAdjustment, isDiscount: false })}
                                             >
                                                 +
@@ -723,11 +839,11 @@ export default function CreateShortTermInvoiceModal({
                                             type="button" 
                                             variant="outline" 
                                             size="sm"
-                                            className="h-8 w-8 p-0"
+                                            className="h-10 w-10 p-0"
                                             onClick={handleAddAdjustment}
                                             disabled={!newAdjustment.description || newAdjustment.amount <= 0}
                                         >
-                                            <Plus className="h-3 w-3" />
+                                            <Plus className="h-4 w-4" />
                                         </Button>
                                     </div>
                                 </div>
@@ -776,6 +892,78 @@ export default function CreateShortTermInvoiceModal({
 
                     </form>
                 </Form>
+    );
+
+    const confirmationDialog = (
+        <Dialog open={showConfirmation} onOpenChange={setShowConfirmation}>
+            <DialogContent className="max-w-md">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <AlertTriangle className="h-5 w-5 text-amber-500" />
+                        {t('invoices.confirmCreateTitle')}
+                    </DialogTitle>
+                </DialogHeader>
+                <DialogBody>
+                <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">{t('invoices.confirmCreateMessage')}</p>
+                    <p className="text-sm text-amber-600 dark:text-amber-400 font-medium">
+                        {t('invoices.confirmAutoTerminate')}
+                    </p>
+                    <ul className="list-disc list-inside text-sm space-y-1 text-muted-foreground">
+                        <li>{t('invoices.confirmTerminateContract')}</li>
+                        <li>{t('invoices.confirmRoomAvailable')}</li>
+                        <li>{t('invoices.confirmTenantUpdate')}</li>
+                    </ul>
+                </div>
+                </DialogBody>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setShowConfirmation(false)}>
+                        {t('common.cancel')}
+                    </Button>
+                    <Button onClick={handleConfirmCreate} disabled={createMutation.isPending}>
+                        {createMutation.isPending ? (
+                            <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                {t('common.loading')}
+                            </>
+                        ) : (
+                            <>
+                                <Receipt className="mr-2 h-4 w-4" />
+                                {t('invoices.confirmCreate')}
+                            </>
+                        )}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+
+    if (renderAsPage) {
+        return (
+            <>
+                <div className="space-y-6">
+                    <div className="bg-card border rounded-lg p-6">
+                        {formContent}
+                    </div>
+                </div>
+                {confirmationDialog}
+            </>
+        );
+    }
+
+    return (
+        <>
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-5xl">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <Receipt className="h-5 w-5 text-emerald-600" />
+                        {t('invoices.shortTermTitle')}
+                    </DialogTitle>
+                </DialogHeader>
+
+                <DialogBody>
+                    {formContent}
                 </DialogBody>
 
                 <DialogFooter>
@@ -802,50 +990,7 @@ export default function CreateShortTermInvoiceModal({
                 </DialogFooter>
             </DialogContent>
         </Dialog>
-
-            {/* Confirmation Dialog */}
-            <Dialog open={showConfirmation} onOpenChange={setShowConfirmation}>
-                <DialogContent className="max-w-md">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <AlertTriangle className="h-5 w-5 text-amber-500" />
-                            {t('invoices.confirmCreateTitle')}
-                        </DialogTitle>
-                    </DialogHeader>
-                    <DialogBody>
-                    <div className="space-y-2">
-                        <p className="text-sm text-muted-foreground">{t('invoices.confirmCreateMessage')}</p>
-                        <p className="text-sm text-amber-600 dark:text-amber-400 font-medium">
-                            {t('invoices.confirmAutoTerminate')}
-                        </p>
-                        <ul className="list-disc list-inside text-sm space-y-1 text-muted-foreground">
-                            <li>{t('invoices.confirmTerminateContract')}</li>
-                            <li>{t('invoices.confirmRoomAvailable')}</li>
-                            <li>{t('invoices.confirmTenantUpdate')}</li>
-                        </ul>
-                    </div>
-                    </DialogBody>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowConfirmation(false)}>
-                            {t('common.cancel')}
-                        </Button>
-                        <Button onClick={handleConfirmCreate} disabled={createMutation.isPending}>
-                            {createMutation.isPending ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    {t('common.loading')}
-                                </>
-                            ) : (
-                                <>
-                                    <Receipt className="mr-2 h-4 w-4" />
-                                    {t('invoices.confirmCreate')}
-                                </>
-                            )}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+        {confirmationDialog}
         </>
     );
 }
-

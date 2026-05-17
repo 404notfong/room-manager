@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { DialogBody, DialogFooter } from '@/components/ui/dialog';
+import { Loader2 } from 'lucide-react';
 import {
     Select,
     SelectContent,
@@ -23,8 +23,9 @@ export type TenantFormData = z.infer<ReturnType<typeof useTenantSchema>>;
 interface TenantFormProps {
     defaultValues?: Partial<TenantFormData>;
     onSubmit: (data: TenantFormData) => void;
-    onCancel: () => void;
+    onCancel?: () => void;
     isSubmitting?: boolean;
+    formId?: string;
 }
 
 export default function TenantForm({
@@ -32,6 +33,7 @@ export default function TenantForm({
     onSubmit,
     onCancel,
     isSubmitting = false,
+    formId,
 }: TenantFormProps) {
     const { t } = useTranslation();
     const schema = useTenantSchema();
@@ -68,8 +70,8 @@ export default function TenantForm({
     };
 
     return (
-        <form onSubmit={handleSubmit(handleFormSubmit)} className="flex flex-col flex-1 overflow-hidden">
-            <DialogBody>
+        <form id={formId} onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
+            <div>
                 <div className="space-y-4">
                     {defaultValues?.code && (
                         <div className="space-y-2">
@@ -237,16 +239,21 @@ export default function TenantForm({
                     </div>
 
                 </div>
-            </DialogBody>
+            </div>
 
-            <DialogFooter>
-                <Button type="button" variant="outline" onClick={onCancel}>
-                    {t('common.cancel')}
-                </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                    {t('common.save')}
-                </Button>
-            </DialogFooter>
+            {!formId && (
+                <div className="flex justify-end gap-3 pt-4 border-t">
+                    {onCancel && (
+                        <Button type="button" variant="outline" onClick={onCancel}>
+                            {t('common.cancel')}
+                        </Button>
+                    )}
+                    <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {t('common.save')}
+                    </Button>
+                </div>
+            )}
         </form >
     );
 }

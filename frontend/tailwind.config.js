@@ -17,13 +17,8 @@ export default {
         },
         extend: {
             fontFamily: {
-                sans: ['"Be Vietnam Pro"', '"Noto Sans"', 'sans-serif'],
-                display: ['"Be Vietnam Pro"', 'sans-serif'], // For Headers
-            },
-            boxShadow: {
-                'nb-sm': '2px 2px 0px 0px hsl(var(--border))',
-                'nb': '4px 4px 0px 0px hsl(var(--border))',
-                'nb-lg': '6px 6px 0px 0px hsl(var(--border))',
+                sans: ['"Be Vietnam Pro"', '"Noto Sans"', 'system-ui', 'sans-serif'],
+                display: ['"Plus Jakarta Sans"', '"Be Vietnam Pro"', 'sans-serif'],
             },
             colors: {
                 border: "hsl(var(--border))",
@@ -59,6 +54,38 @@ export default {
                     DEFAULT: "hsl(var(--card))",
                     foreground: "hsl(var(--card-foreground))",
                 },
+                /* Status colors (semantic) */
+                success: {
+                    DEFAULT: "hsl(var(--success))",
+                    foreground: "hsl(var(--success-foreground))",
+                },
+                warning: {
+                    DEFAULT: "hsl(var(--warning))",
+                    foreground: "hsl(var(--warning-foreground))",
+                },
+                info: {
+                    DEFAULT: "hsl(var(--info))",
+                    foreground: "hsl(var(--info-foreground))",
+                },
+                error: {
+                    DEFAULT: "hsl(var(--error))",
+                    foreground: "hsl(var(--error-foreground))",
+                },
+                /* Chart palette */
+                "chart-1": "hsl(var(--chart-1))",
+                "chart-2": "hsl(var(--chart-2))",
+                "chart-3": "hsl(var(--chart-3))",
+                "chart-4": "hsl(var(--chart-4))",
+                "chart-5": "hsl(var(--chart-5))",
+                "chart-6": "hsl(var(--chart-6))",
+                /* Sidebar */
+                sidebar: {
+                    DEFAULT: "hsl(var(--sidebar))",
+                    foreground: "hsl(var(--sidebar-foreground))",
+                    border: "hsl(var(--sidebar-border))",
+                    accent: "hsl(var(--sidebar-accent))",
+                    "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
+                },
             },
             borderRadius: {
                 lg: "var(--radius)",
@@ -82,15 +109,23 @@ export default {
                     from: { height: "var(--radix-collapsible-content-height)" },
                     to: { height: 0 },
                 },
-
+                "fade-in": {
+                    from: { opacity: 0 },
+                    to: { opacity: 1 },
+                },
+                "slide-in-from-right": {
+                    from: { transform: "translateX(100%)" },
+                    to: { transform: "translateX(0)" },
+                },
             },
             animation: {
                 "accordion-down": "accordion-down 0.2s ease-out",
                 "accordion-up": "accordion-up 0.2s ease-out",
                 "collapsible-down": "collapsible-down 0.2s ease-out",
                 "collapsible-up": "collapsible-up 0.2s ease-out",
+                "fade-in": "fade-in 0.2s ease-out",
+                "slide-in-right": "slide-in-from-right 0.3s ease-out",
             },
-
         },
     },
     plugins: [require("tailwindcss-animate")],

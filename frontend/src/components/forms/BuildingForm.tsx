@@ -5,10 +5,7 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-    DialogBody,
-    DialogFooter,
-} from '@/components/ui/dialog';
+import { Loader2 } from 'lucide-react';
 
 interface BuildingFormProps {
     defaultValues?: {
@@ -23,9 +20,10 @@ interface BuildingFormProps {
         description: string;
     };
     onSubmit: (data: BuildingFormData) => void;
-    onCancel: () => void;
+    onCancel?: () => void;
     isSubmitting?: boolean;
     isEditing?: boolean;
+    formId?: string;
 }
 
 // Schema hook for i18n validation
@@ -58,6 +56,7 @@ export default function BuildingForm({
     onCancel,
     isSubmitting = false,
     isEditing = false,
+    formId,
 }: BuildingFormProps) {
     const { t } = useTranslation();
     const schema = useBuildingSchema();
@@ -83,106 +82,109 @@ export default function BuildingForm({
     };
 
     return (
-        <form onSubmit={handleSubmit(handleFormSubmit)} className="flex flex-col flex-1 overflow-hidden">
-            <DialogBody>
-                <div className="space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="name">{t('buildings.name')} <span className="text-destructive">*</span></Label>
-                        <Input
-                            id="name"
-                            {...register('name')}
-                            placeholder={t('buildings.namePlaceholder')}
-                            className={errors.name ? 'border-destructive' : ''}
-                        />
-                        {errors.name && (
-                            <p className="text-sm text-destructive">{errors.name.message}</p>
-                        )}
-                    </div>
-
-                    {isEditing && (
-                        <div className="space-y-2">
-                            <Label htmlFor="code">{t('buildings.code')}</Label>
-                            <Input
-                                id="code"
-                                {...register('code')}
-                                disabled
-                                className="bg-muted"
-                            />
-                        </div>
+        <form id={formId} onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
+            <div className="space-y-4">
+                <div className="space-y-2">
+                    <Label htmlFor="name">{t('buildings.name')} <span className="text-destructive">*</span></Label>
+                    <Input
+                        id="name"
+                        {...register('name')}
+                        placeholder={t('buildings.namePlaceholder')}
+                        className={errors.name ? 'border-destructive' : ''}
+                    />
+                    {errors.name && (
+                        <p className="text-sm text-destructive">{errors.name.message}</p>
                     )}
+                </div>
 
+                {isEditing && (
                     <div className="space-y-2">
-                        <Label htmlFor="street">{t('buildings.street')} <span className="text-destructive">*</span></Label>
+                        <Label htmlFor="code">{t('buildings.code')}</Label>
                         <Input
-                            id="street"
-                            {...register('address.street')}
-                            placeholder={t('buildings.streetPlaceholder')}
-                            className={errors.address?.street ? 'border-destructive' : ''}
+                            id="code"
+                            {...register('code')}
+                            disabled
+                            className="bg-muted"
                         />
-                        {errors.address?.street && (
-                            <p className="text-sm text-destructive">{errors.address.street.message}</p>
+                    </div>
+                )}
+
+                <div className="space-y-2">
+                    <Label htmlFor="street">{t('buildings.street')} <span className="text-destructive">*</span></Label>
+                    <Input
+                        id="street"
+                        {...register('address.street')}
+                        placeholder={t('buildings.streetPlaceholder')}
+                        className={errors.address?.street ? 'border-destructive' : ''}
+                    />
+                    {errors.address?.street && (
+                        <p className="text-sm text-destructive">{errors.address.street.message}</p>
+                    )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                        <Label htmlFor="ward">{t('buildings.ward')} <span className="text-destructive">*</span></Label>
+                        <Input
+                            id="ward"
+                            {...register('address.ward')}
+                            placeholder={t('buildings.wardPlaceholder')}
+                            className={errors.address?.ward ? 'border-destructive' : ''}
+                        />
+                        {errors.address?.ward && (
+                            <p className="text-sm text-destructive">{errors.address.ward.message}</p>
                         )}
                     </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-2">
-                            <Label htmlFor="ward">{t('buildings.ward')} <span className="text-destructive">*</span></Label>
-                            <Input
-                                id="ward"
-                                {...register('address.ward')}
-                                placeholder={t('buildings.wardPlaceholder')}
-                                className={errors.address?.ward ? 'border-destructive' : ''}
-                            />
-                            {errors.address?.ward && (
-                                <p className="text-sm text-destructive">{errors.address.ward.message}</p>
-                            )}
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="district">{t('buildings.district')} <span className="text-destructive">*</span></Label>
-                            <Input
-                                id="district"
-                                {...register('address.district')}
-                                placeholder={t('buildings.districtPlaceholder')}
-                                className={errors.address?.district ? 'border-destructive' : ''}
-                            />
-                            {errors.address?.district && (
-                                <p className="text-sm text-destructive">{errors.address.district.message}</p>
-                            )}
-                        </div>
-                    </div>
-
                     <div className="space-y-2">
-                        <Label htmlFor="city">{t('buildings.city')} <span className="text-destructive">*</span></Label>
+                        <Label htmlFor="district">{t('buildings.district')} <span className="text-destructive">*</span></Label>
                         <Input
-                            id="city"
-                            {...register('address.city')}
-                            placeholder={t('buildings.cityPlaceholder')}
-                            className={errors.address?.city ? 'border-destructive' : ''}
+                            id="district"
+                            {...register('address.district')}
+                            placeholder={t('buildings.districtPlaceholder')}
+                            className={errors.address?.district ? 'border-destructive' : ''}
                         />
-                        {errors.address?.city && (
-                            <p className="text-sm text-destructive">{errors.address.city.message}</p>
+                        {errors.address?.district && (
+                            <p className="text-sm text-destructive">{errors.address.district.message}</p>
                         )}
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label htmlFor="description">{t('buildings.description')}</Label>
-                        <Input
-                            id="description"
-                            {...register('description')}
-                            placeholder={t('buildings.descriptionPlaceholder')}
-                        />
                     </div>
                 </div>
-            </DialogBody>
 
-            <DialogFooter>
-                <Button type="button" variant="outline" onClick={onCancel}>
-                    {t('common.cancel')}
-                </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                    {t('common.save')}
-                </Button>
-            </DialogFooter>
-        </form >
+                <div className="space-y-2">
+                    <Label htmlFor="city">{t('buildings.city')} <span className="text-destructive">*</span></Label>
+                    <Input
+                        id="city"
+                        {...register('address.city')}
+                        placeholder={t('buildings.cityPlaceholder')}
+                        className={errors.address?.city ? 'border-destructive' : ''}
+                    />
+                    {errors.address?.city && (
+                        <p className="text-sm text-destructive">{errors.address.city.message}</p>
+                    )}
+                </div>
+
+                <div className="space-y-2">
+                    <Label htmlFor="description">{t('buildings.description')}</Label>
+                    <Input
+                        id="description"
+                        {...register('description')}
+                        placeholder={t('buildings.descriptionPlaceholder')}
+                    />
+                </div>
+            </div>
+
+            {!formId && (
+                <div className="flex justify-end gap-3 pt-4 border-t">
+                    {onCancel && (
+                        <Button type="button" variant="outline" onClick={onCancel}>
+                            {t('common.cancel')}
+                        </Button>
+                    )}
+                    <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {t('common.save')}
+                    </Button>
+                </div>
+            )}
+        </form>
     );
 }

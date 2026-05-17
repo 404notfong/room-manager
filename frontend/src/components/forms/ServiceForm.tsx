@@ -8,7 +8,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { DialogBody, DialogFooter } from '@/components/ui/dialog';
+import { Loader2 } from 'lucide-react';
 import { NumberInput } from '@/components/ui/number-input';
 import apiClient from '@/api/client';
 
@@ -26,8 +26,9 @@ export type ServiceFormData = {
 interface ServiceFormProps {
     defaultValues?: Partial<ServiceFormData>;
     onSubmit: (data: ServiceFormData) => void;
-    onCancel: () => void;
+    onCancel?: () => void;
     isSubmitting?: boolean;
+    formId?: string;
 }
 
 interface Building {
@@ -41,6 +42,7 @@ export default function ServiceForm({
     onSubmit,
     onCancel,
     isSubmitting = false,
+    formId,
 }: ServiceFormProps) {
     const { t } = useTranslation();
 
@@ -238,12 +240,12 @@ export default function ServiceForm({
     }, [errors, isSubmitting]);
 
     return (
-        <form onSubmit={handleSubmit((data) => {
+        <form id={formId} onSubmit={handleSubmit((data) => {
             onSubmit(data);
         }, () => {
             // Form validation errors handled by UI
-        })} className="flex flex-col flex-1 overflow-hidden">
-            <DialogBody>
+        })} className="space-y-6">
+            <div>
                 <div className="space-y-4">
                     {/* Name */}
                     <div className="space-y-2">
@@ -548,16 +550,21 @@ export default function ServiceForm({
                         <Label htmlFor="isActive">{t('services.isActive')}</Label>
                     </div>
                 </div>
-            </DialogBody>
+            </div>
 
-            <DialogFooter>
-                <Button type="button" variant="outline" onClick={onCancel}>
-                    {t('common.cancel')}
-                </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                    {t('common.save')}
-                </Button>
-            </DialogFooter>
+            {!formId && (
+                <div className="flex justify-end gap-3 pt-4 border-t">
+                    {onCancel && (
+                        <Button type="button" variant="outline" onClick={onCancel}>
+                            {t('common.cancel')}
+                        </Button>
+                    )}
+                    <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {t('common.save')}
+                    </Button>
+                </div>
+            )}
         </form>
     );
 }

@@ -65,7 +65,7 @@ export default function RecordPaymentModal({
     const remainingAmount = invoice?.remainingAmount || 
         ((invoice?.totalAmount || 0) - (invoice?.paidAmount || 0));
 
-    const [amount, setAmount] = useState<string>(formatNumberInput(remainingAmount.toString()));
+    const [amount, setAmount] = useState<string>('');
     const [paymentMethod, setPaymentMethod] = useState<string>('CASH');
     const [paymentDate, setPaymentDate] = useState<Date>(new Date());
     const [transactionId, setTransactionId] = useState<string>('');
@@ -74,9 +74,7 @@ export default function RecordPaymentModal({
     // Reset form when modal opens with new invoice
     useEffect(() => {
         if (open && invoice) {
-            const remaining = invoice?.remainingAmount || 
-                ((invoice?.totalAmount || 0) - (invoice?.paidAmount || 0));
-            setAmount(formatNumberInput(remaining.toString()));
+            setAmount('');
             setPaymentMethod('CASH');
             setPaymentDate(new Date());
             setTransactionId('');

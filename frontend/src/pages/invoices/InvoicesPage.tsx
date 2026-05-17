@@ -1,9 +1,5 @@
 import apiClient from '@/api/client';
 import { ColumnVisibilityToggle } from '@/components/ColumnVisibilityToggle';
-import ContractSelectModal from '@/components/ContractSelectModal';
-import CreateInvoiceModal from '@/components/CreateInvoiceModal';
-import CreateShortTermInvoiceModal from '@/components/CreateShortTermInvoiceModal';
-import InvoiceViewModal from '@/components/InvoiceViewModal';
 import Pagination from '@/components/Pagination';
 import RecordPaymentModal from '@/components/RecordPaymentModal';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +30,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, CreditCard, Eye, Plus, Receipt, Search, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 interface Invoice {
     _id: string;
@@ -66,22 +63,18 @@ const invoicesApi = {
 
 export default function InvoicesPage() {
     const { t } = useTranslation();
+    const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { selectedBuildingId } = useBuildingStore();
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearchTerm = useDebounce(searchTerm, 500);
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-    const [isViewOpen, setIsViewOpen] = useState(false);
     const [isPaymentOpen, setIsPaymentOpen] = useState(false);
     const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
 
-    // Contract selection & invoice creation states
-    const [isSelectContractOpen, setIsSelectContractOpen] = useState(false);
-    const [selectedContract, setSelectedContract] = useState<any>(null);
-    const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
-    const [isCreateShortTermInvoiceOpen, setIsCreateShortTermInvoiceOpen] = useState(false);
+
 
     // Column visibility configuration
     const columnConfig: ColumnConfig[] = [
@@ -123,15 +116,7 @@ export default function InvoicesPage() {
         setIsDeleteOpen(true);
     };
 
-    const handleContractSelected = (contract: any) => {
-        setSelectedContract(contract);
-        const type = contract.roomType || contract.contractType;
-        if (type === 'SHORT_TERM') {
-            setIsCreateShortTermInvoiceOpen(true);
-        } else {
-            setIsCreateInvoiceOpen(true);
-        }
-    };
+
 
     const getStatusBadge = (status: string) => {
         switch (status) {
@@ -177,7 +162,7 @@ export default function InvoicesPage() {
                     <h1 className="text-3xl font-bold tracking-tight">{t('invoices.title')}</h1>
                     <p className="text-muted-foreground">{t('invoices.subtitle')}</p>
                 </div>
-                <Button onClick={() => setIsSelectContractOpen(true)}>
+                <Button onClick={() => navigate('/invoices/new')}>
                     <Plus className="mr-2 h-4 w-4" />
                     {t('invoices.generate')}
                 </Button>
@@ -239,10 +224,7 @@ export default function InvoicesPage() {
                                         {columnVisibility.isVisible('invoiceNumber') && (
                                             <TableCell
                                                 className="font-mono text-xs font-medium cursor-pointer hover:text-primary hover:underline"
-                                                onClick={() => {
-                                                    setSelectedInvoice(invoice);
-                                                    setIsViewOpen(true);
-                                                }}
+                                                onClick={() => navigate(`/invoices/${invoice._id}`)}
                                             >
                                                 {invoice.invoiceNumber}
                                             </TableCell>
@@ -290,10 +272,7 @@ export default function InvoicesPage() {
                                         )}
                                         <TableCell>
                                             <div className="flex items-center gap-1">
-                                                <Button variant="ghost" size="icon" onClick={() => {
-                                                    setSelectedInvoice(invoice);
-                                                    setIsViewOpen(true);
-                                                }} title={t('common.view')}>
+                                                <Button variant="ghost" size="icon" onClick={() => navigate(`/invoices/${invoice._id}`)} title={t('common.view')}>
                                                     <Eye className="h-4 w-4" />
                                                 </Button>
                                                 {invoice.status !== 'PAID' && invoice.status !== 'CANCELLED' && (
@@ -356,16 +335,7 @@ export default function InvoicesPage() {
                 </DialogContent>
             </Dialog>
 
-            {/* View Invoice Modal */}
-            <InvoiceViewModal
-                open={isViewOpen}
-                onOpenChange={setIsViewOpen}
-                invoice={selectedInvoice}
-                onRecordPayment={() => {
-                    setIsViewOpen(false);
-                    setIsPaymentOpen(true);
-                }}
-            />
+
 
             {/* Record Payment Modal */}
             <RecordPaymentModal
@@ -378,38 +348,6 @@ export default function InvoicesPage() {
                 }}
             />
 
-            {/* Contract Selection Modal */}
-            <ContractSelectModal
-                open={isSelectContractOpen}
-                onOpenChange={setIsSelectContractOpen}
-                onSelect={handleContractSelected}
-            />
-
-            {/* Create Invoice Modal (Long-term) */}
-            <CreateInvoiceModal
-                open={isCreateInvoiceOpen}
-                onOpenChange={setIsCreateInvoiceOpen}
-                contract={selectedContract}
-                room={selectedContract?.roomId}
-                onSuccess={() => {
-                    setIsCreateInvoiceOpen(false);
-                    setSelectedContract(null);
-                    queryClient.invalidateQueries({ queryKey: ['invoices'] });
-                }}
-            />
-
-            {/* Create Short-Term Invoice Modal */}
-            <CreateShortTermInvoiceModal
-                open={isCreateShortTermInvoiceOpen}
-                onOpenChange={setIsCreateShortTermInvoiceOpen}
-                contract={selectedContract}
-                room={selectedContract?.roomId}
-                onSuccess={() => {
-                    setIsCreateShortTermInvoiceOpen(false);
-                    setSelectedContract(null);
-                    queryClient.invalidateQueries({ queryKey: ['invoices'] });
-                }}
-            />
         </div>
     );
 }

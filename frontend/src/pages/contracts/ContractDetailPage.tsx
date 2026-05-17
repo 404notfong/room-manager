@@ -1,38 +1,60 @@
+import { useQuery } from '@tanstack/react-query';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import {
+    ArrowLeft,
     Download,
     Loader2,
+    Pencil,
     Printer,
-    X,
 } from 'lucide-react';
 import { useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
-import CreateInvoiceModal from './CreateInvoiceModal';
-import CreateShortTermInvoiceModal from './CreateShortTermInvoiceModal';
-
+import apiClient from '@/api/client';
+import CreateInvoiceModal from '@/components/CreateInvoiceModal';
+import CreateShortTermInvoiceModal from '@/components/CreateShortTermInvoiceModal';
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogContent,
-} from '@/components/ui/dialog';
 import { formatDate, formatPhoneNumber } from '@/lib/utils';
 
-interface ContractViewModalProps {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    contract: any;
-}
-
-export default function ContractViewModal({ open, onOpenChange, contract }: ContractViewModalProps) {
+export default function ContractDetailPage() {
     const navigate = useNavigate();
+    const { id } = useParams<{ id: string }>();
     const receiptRef = useRef<HTMLDivElement>(null);
     const [isExporting, setIsExporting] = useState(false);
     const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
     const [isCreateShortTermInvoiceOpen, setIsCreateShortTermInvoiceOpen] = useState(false);
 
-    if (!contract) return null;
+    const { data: contract, isLoading, isError } = useQuery({
+        queryKey: ['contract', id],
+        queryFn: async () => {
+            const response = await apiClient.get(`/contracts/${id}`);
+            return response.data;
+        },
+        enabled: !!id,
+    });
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+        );
+    }
+
+    if (isError || !contract) {
+        return (
+            <div className="space-y-6">
+                <div className="flex items-center gap-4">
+                    <Button variant="ghost" size="icon" onClick={() => navigate('/contracts')}>
+                        <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                    <h1 className="text-3xl font-bold tracking-tight">Không tìm thấy</h1>
+                </div>
+                <p className="text-muted-foreground">Hợp đồng không tồn tại hoặc đã bị xóa.</p>
+            </div>
+        );
+    }
 
     const formatCurrency = (amount: number | undefined) => {
         if (amount === undefined || amount === null) return '-';
@@ -80,7 +102,6 @@ export default function ContractViewModal({ open, onOpenChange, contract }: Cont
         if (!receiptRef.current) return;
         setIsExporting(true);
         try {
-            // Clone the element outside the dialog portal so html2canvas can capture it properly
             const clone = receiptRef.current.cloneNode(true) as HTMLElement;
             clone.style.position = 'absolute';
             clone.style.left = '-9999px';
@@ -110,7 +131,6 @@ export default function ContractViewModal({ open, onOpenChange, contract }: Cont
             const ratio = pdfWidth / imgWidth;
             const pdfHeight = imgHeight * ratio;
 
-            // Handle multi-page if content is taller than A4
             const pageHeight = pdf.internal.pageSize.getHeight();
             if (pdfHeight + 10 > pageHeight) {
                 let remainingHeight = pdfHeight;
@@ -142,7 +162,6 @@ export default function ContractViewModal({ open, onOpenChange, contract }: Cont
         const printWindow = window.open('', '_blank');
         if (!printWindow) return;
 
-        // Collect all stylesheets from the page so Tailwind classes work
         const styleSheets = Array.from(document.styleSheets);
         let cssText = '';
         styleSheets.forEach((sheet) => {
@@ -152,7 +171,6 @@ export default function ContractViewModal({ open, onOpenChange, contract }: Cont
                     cssText += rule.cssText + '\n';
                 });
             } catch {
-                // Cross-origin stylesheets can't be read, use link tag instead
                 if (sheet.href) {
                     cssText += `@import url("${sheet.href}");\n`;
                 }
@@ -183,12 +201,10 @@ export default function ContractViewModal({ open, onOpenChange, contract }: Cont
             </html>
         `);
         printWindow.document.close();
-        // Wait for styles to load before printing
         printWindow.onload = () => {
             printWindow.focus();
             printWindow.print();
         };
-        // Fallback: print after a short delay if onload doesn't fire
         setTimeout(() => {
             printWindow.focus();
             printWindow.print();
@@ -198,42 +214,37 @@ export default function ContractViewModal({ open, onOpenChange, contract }: Cont
     const isLongTerm = (contract.roomType || contract.contractType) === 'LONG_TERM';
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent hideCloseButton className="max-w-[420px] max-h-[90vh] p-0 gap-0 overflow-hidden bg-slate-100 dark:bg-slate-800">
-                {/* Toolbar */}
-                <div className="flex items-center justify-between px-3 py-2 border-b bg-slate-200 dark:bg-slate-700">
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Chi tiết hợp đồng</span>
-                    <div className="flex items-center gap-1">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={handlePrint}
-                        >
-                            <Printer className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={handleExportPDF}
-                            disabled={isExporting}
-                        >
-                            {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => onOpenChange(false)}
-                        >
-                            <X className="h-4 w-4" />
-                        </Button>
+        <div className="space-y-6">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <Button variant="ghost" size="icon" onClick={() => navigate('/contracts')}>
+                        <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight">Chi tiết hợp đồng</h1>
+                        <p className="text-muted-foreground">{contract.contractCode}</p>
                     </div>
                 </div>
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={handlePrint}>
+                        <Printer className="h-4 w-4 mr-2" /> In
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleExportPDF} disabled={isExporting}>
+                        {isExporting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+                        PDF
+                    </Button>
+                    {(contract.status === 'DRAFT' || contract.status === 'ACTIVE') && (
+                        <Button variant="outline" size="sm" onClick={() => navigate(`/contracts/${contract._id}/edit`)}>
+                            <Pencil className="h-4 w-4 mr-2" /> Sửa
+                        </Button>
+                    )}
+                </div>
+            </div>
 
-                {/* Contract Paper */}
-                <div className="flex-1 overflow-y-auto p-4">
+            {/* Contract Paper */}
+            <div className="flex justify-center">
+                <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-6 max-w-[460px] w-full">
                     <div 
                         ref={receiptRef}
                         className="shadow-lg mx-auto"
@@ -453,7 +464,7 @@ export default function ContractViewModal({ open, onOpenChange, contract }: Cont
                                         )}
                                 </>
                             )}
-                            {/* Services - merged into price table */}
+                            {/* Services */}
                             {contract.serviceCharges && contract.serviceCharges.length > 0 && (
                                 <>
                                     <div className="border-b border-dotted my-1" style={{ borderColor: '#e2e8f0' }} />
@@ -492,8 +503,6 @@ export default function ContractViewModal({ open, onOpenChange, contract }: Cont
                             </div>
                         )}
 
-
-
                         {/* Tear-off edge effect */}
                         <div 
                             className="mt-6 -mx-5 -mb-6 h-4"
@@ -503,41 +512,35 @@ export default function ContractViewModal({ open, onOpenChange, contract }: Cont
                         />
                     </div>
                 </div>
+            </div>
 
-                {/* Action Footer */}
-                <div className="p-3 border-t bg-white dark:bg-slate-800 flex gap-2 flex-wrap justify-end">
-                    {contract.status === 'ACTIVE' && isLongTerm && (
-                        <Button
-                            onClick={() => setIsCreateInvoiceOpen(true)}
-                            size="sm"
-                            className="bg-emerald-600 hover:bg-emerald-700"
-                        >
-                            Tạo hóa đơn
-                        </Button>
-                    )}
-                    {contract.status === 'ACTIVE' && !isLongTerm && (
-                        <Button
-                            onClick={() => setIsCreateShortTermInvoiceOpen(true)}
-                            size="sm"
-                            className="bg-orange-600 hover:bg-orange-700"
-                        >
-                            Tạo hóa đơn
-                        </Button>
-                    )}
-                    {contract.status === 'ACTIVE' && (
-                        <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => {
-                                onOpenChange(false);
-                                navigate(`/contracts/${contract._id}/terminate`);
-                            }}
-                        >
-                            Thanh lý
-                        </Button>
-                    )}
-                </div>
-            </DialogContent>
+            {/* Action Footer */}
+            <div className="flex gap-2 justify-center">
+                {contract.status === 'ACTIVE' && isLongTerm && (
+                    <Button
+                        onClick={() => setIsCreateInvoiceOpen(true)}
+                        className="bg-emerald-600 hover:bg-emerald-700"
+                    >
+                        Tạo hóa đơn
+                    </Button>
+                )}
+                {contract.status === 'ACTIVE' && !isLongTerm && (
+                    <Button
+                        onClick={() => setIsCreateShortTermInvoiceOpen(true)}
+                        className="bg-orange-600 hover:bg-orange-700"
+                    >
+                        Tạo hóa đơn
+                    </Button>
+                )}
+                {contract.status === 'ACTIVE' && (
+                    <Button
+                        variant="destructive"
+                        onClick={() => navigate(`/contracts/${contract._id}/terminate`)}
+                    >
+                        Thanh lý
+                    </Button>
+                )}
+            </div>
 
             {/* Create Invoice Modal - Long Term */}
             <CreateInvoiceModal
@@ -558,9 +561,8 @@ export default function ContractViewModal({ open, onOpenChange, contract }: Cont
                 room={contract.roomId}
                 onSuccess={() => {
                     setIsCreateShortTermInvoiceOpen(false);
-                    onOpenChange(false);
                 }}
             />
-        </Dialog>
+        </div>
     );
 }

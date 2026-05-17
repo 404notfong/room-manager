@@ -1,26 +1,12 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Copy, DoorOpen, Droplets, Pencil, Plus, Search, Trash2, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, DoorOpen, Droplets, Pencil, Plus, Search, Trash2, Zap } from 'lucide-react';
-import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-
-import apiClient from '@/api/client';
-import { ColumnVisibilityToggle } from '@/components/ColumnVisibilityToggle';
-import RoomForm, { RoomFormData } from '@/components/forms/RoomForm';
-import Pagination from '@/components/Pagination';
-import { PriceTablePopover } from '@/components/PriceTablePopover';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import {
     Table,
     TableBody,
@@ -29,11 +15,23 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import { ColumnConfig, useColumnVisibility } from '@/hooks/useColumnVisibility';
+import { ColumnVisibilityToggle } from '@/components/ColumnVisibilityToggle';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useBuildingStore } from '@/stores/buildingStore';
+import Pagination from '@/components/Pagination';
+import { PriceTablePopover } from '@/components/PriceTablePopover';
 import { formatCellValue } from '@/utils/tableUtils';
+import apiClient from '@/api/client';
 
 interface ShortTermPriceTier {
     fromValue: number;
@@ -53,7 +51,6 @@ interface Room {
     status: 'AVAILABLE' | 'OCCUPIED' | 'MAINTENANCE' | 'DEPOSITED';
     amenities: string[];
     description?: string;
-    // New fields
     roomType: 'LONG_TERM' | 'SHORT_TERM';
     defaultElectricPrice?: number;
     defaultWaterPrice?: number;
@@ -75,31 +72,8 @@ const roomsApi = {
         const response = await apiClient.get('/rooms', { params });
         return response.data;
     },
-    create: async (data: RoomFormData) => {
-        // Clean up empty strings for optional MongoID fields
-        const cleanData = {
-            ...data,
-            roomGroupId: data.roomGroupId || undefined,
-            description: data.description || undefined,
-            area: data.area || undefined,
-            maxOccupancy: data.maxOccupancy || undefined,
-        };
-        const response = await apiClient.post('/rooms', cleanData);
-        return response.data;
-    },
-    update: async (id: string, data: Partial<RoomFormData>) => {
-        // Clean up empty strings for optional MongoID fields
-        // Also exclude buildingId as it cannot be changed after creation
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { buildingId: _, ...updateData } = data;
-        const cleanData = {
-            ...updateData,
-            roomGroupId: updateData.roomGroupId === '' ? null : (updateData.roomGroupId || undefined),
-            description: updateData.description || undefined,
-            area: updateData.area || undefined,
-            maxOccupancy: updateData.maxOccupancy || undefined,
-        };
-        const response = await apiClient.put(`/rooms/${id}`, cleanData);
+    update: async (id: string, data: any) => {
+        const response = await apiClient.put(`/rooms/${id}`, data);
         return response.data;
     },
     delete: async (id: string) => {
@@ -110,18 +84,16 @@ const roomsApi = {
 
 export default function RoomsPage() {
     const { t } = useTranslation();
+    const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { selectedBuildingId } = useBuildingStore();
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearchTerm = useDebounce(searchTerm, 500);
-    const [isAddOpen, setIsAddOpen] = useState(false);
-    const [isEditOpen, setIsEditOpen] = useState(false);
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
     const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
 
-    // Column visibility configuration
     const columnConfig: ColumnConfig[] = [
         { id: 'roomName', label: t('rooms.roomName') },
         { id: 'roomCode', label: t('rooms.roomCode') },
@@ -146,32 +118,6 @@ export default function RoomsPage() {
     const rooms: Room[] = Array.isArray(roomsData?.data) ? roomsData.data : [];
     const meta = roomsData?.meta || { total: 0, totalPages: 0 };
 
-    const createMutation = useMutation({
-        mutationFn: roomsApi.create,
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['rooms'] });
-            setIsAddOpen(false);
-            toast({ title: t('rooms.createSuccess') });
-        },
-        onError: () => {
-            toast({ variant: 'destructive', title: t('rooms.createError') });
-        },
-    });
-
-    const updateMutation = useMutation({
-        mutationFn: ({ id, data }: { id: string; data: Partial<RoomFormData> }) =>
-            roomsApi.update(id, data),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['rooms'] });
-            setIsEditOpen(false);
-            setSelectedRoom(null);
-            toast({ title: t('rooms.updateSuccess') });
-        },
-        onError: () => {
-            toast({ variant: 'destructive', title: t('rooms.updateError') });
-        },
-    });
-
     const deleteMutation = useMutation({
         mutationFn: roomsApi.delete,
         onSuccess: () => {
@@ -185,7 +131,6 @@ export default function RoomsPage() {
         },
     });
 
-    // Quick status toggle mutation
     const statusMutation = useMutation({
         mutationFn: ({ id, status }: { id: string; status: 'AVAILABLE' | 'MAINTENANCE' }) =>
             roomsApi.update(id, { status }),
@@ -199,14 +144,9 @@ export default function RoomsPage() {
     });
 
     const handleQuickStatusToggle = (room: Room) => {
-        if (room.status === 'OCCUPIED') return; // Can't toggle OCCUPIED status
+        if (room.status === 'OCCUPIED') return;
         const newStatus = room.status === 'AVAILABLE' ? 'MAINTENANCE' : 'AVAILABLE';
         statusMutation.mutate({ id: room._id, status: newStatus });
-    };
-
-    const handleEdit = (room: Room) => {
-        setSelectedRoom(room);
-        setIsEditOpen(true);
     };
 
     const handleDelete = (room: Room) => {
@@ -217,40 +157,15 @@ export default function RoomsPage() {
     const getStatusBadge = (room: Room) => {
         const isClickable = room.status !== 'OCCUPIED';
         const baseClasses = isClickable ? 'cursor-pointer hover:opacity-80 transition-opacity' : '';
-
         switch (room.status) {
             case 'AVAILABLE':
-                return (
-                    <Badge
-                        className={`bg-green-500 ${baseClasses}`}
-                        onClick={() => isClickable && handleQuickStatusToggle(room)}
-                        title={isClickable ? t('rooms.clickToToggleStatus') : undefined}
-                    >
-                        {t('rooms.statusAvailable')}
-                    </Badge>
-                );
+                return <Badge className={`bg-green-500 ${baseClasses}`} onClick={() => isClickable && handleQuickStatusToggle(room)} title={isClickable ? t('rooms.clickToToggleStatus') : undefined}>{t('rooms.statusAvailable')}</Badge>;
             case 'OCCUPIED':
                 return <Badge className="bg-blue-500">{t('rooms.statusOccupied')}</Badge>;
             case 'MAINTENANCE':
-                return (
-                    <Badge
-                        className={`bg-yellow-500 ${baseClasses}`}
-                        onClick={() => isClickable && handleQuickStatusToggle(room)}
-                        title={isClickable ? t('rooms.clickToToggleStatus') : undefined}
-                    >
-                        {t('rooms.statusMaintenance')}
-                    </Badge>
-                );
+                return <Badge className={`bg-yellow-500 ${baseClasses}`} onClick={() => isClickable && handleQuickStatusToggle(room)} title={isClickable ? t('rooms.clickToToggleStatus') : undefined}>{t('rooms.statusMaintenance')}</Badge>;
             case 'DEPOSITED':
-                return (
-                    <Badge
-                        className={`bg-orange-500 ${baseClasses}`}
-                        onClick={() => isClickable && handleQuickStatusToggle(room)}
-                        title={isClickable ? t('rooms.clickToToggleStatus') : undefined}
-                    >
-                        {t('rooms.statusDeposited')}
-                    </Badge>
-                );
+                return <Badge className={`bg-orange-500 ${baseClasses}`} onClick={() => isClickable && handleQuickStatusToggle(room)} title={isClickable ? t('rooms.clickToToggleStatus') : undefined}>{t('rooms.statusDeposited')}</Badge>;
             default:
                 return <Badge variant="outline">{room.status}</Badge>;
         }
@@ -268,7 +183,6 @@ export default function RoomsPage() {
         return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
     };
 
-    // Get display price based on room type
     const getDisplayPrice = (room: Room) => {
         if (room.roomType === 'LONG_TERM') {
             return (
@@ -312,127 +226,19 @@ export default function RoomsPage() {
         setCurrentPage(1);
     };
 
-    // Prepare edit default values
-    const getEditDefaultValues = (room: Room): Partial<RoomFormData> => {
-        return {
-            buildingId: typeof room.buildingId === 'object' ? room.buildingId._id : room.buildingId,
-            roomName: room.roomName,
-            floor: room.floor,
-            area: room.area,
-            maxOccupancy: room.maxOccupancy,
-            status: room.status,
-            description: room.description,
-            roomGroupId: room.roomGroupId ? (typeof room.roomGroupId === 'object' ? room.roomGroupId._id : room.roomGroupId) : undefined,
-            roomType: room.roomType || 'LONG_TERM',
-            defaultElectricPrice: room.defaultElectricPrice,
-            defaultWaterPrice: room.defaultWaterPrice,
-            defaultRoomPrice: room.defaultRoomPrice,
-            defaultTermMonths: room.defaultTermMonths,
-            shortTermPricingType: room.shortTermPricingType,
-            hourlyPricingMode: room.hourlyPricingMode,
-            pricePerHour: room.pricePerHour,
-            shortTermPrices: (!room.shortTermPrices || room.shortTermPrices.length === 0)
-                ? [
-                    { fromValue: 1, toValue: 1, price: 0 },
-                    { fromValue: 2, toValue: -1, price: 0 }
-                ]
-                : room.shortTermPrices,
-            priceTableType: room.priceTableType || 'PROGRESSIVE',
-            fixedPrice: room.fixedPrice,
-            currentElectricIndex: room.currentElectricIndex || 0,
-            currentWaterIndex: room.currentWaterIndex || 0,
-        };
-    };
-
-    // Helper to clean payload before sending to API
-    const cleanRoomData = (data: RoomFormData): any => {
-        const payload: any = { ...data };
-
-        // Clean up based on room type
-        if (payload.roomType === 'LONG_TERM') {
-            delete payload.shortTermPricingType;
-            delete payload.hourlyPricingMode;
-            delete payload.pricePerHour;
-            delete payload.shortTermPrices;
-            delete payload.fixedPrice;
-        } else {
-            // Short Term
-            delete payload.defaultElectricPrice;
-            delete payload.defaultWaterPrice;
-            delete payload.defaultRoomPrice;
-            delete payload.defaultTermMonths;
-
-            if (payload.shortTermPricingType !== 'HOURLY') {
-                delete payload.hourlyPricingMode;
-                delete payload.pricePerHour;
-            }
-            if (payload.shortTermPricingType === 'HOURLY' && payload.hourlyPricingMode === 'PER_HOUR') {
-                delete payload.shortTermPrices;
-            }
-            if (payload.shortTermPricingType === 'HOURLY' && payload.hourlyPricingMode === 'TABLE') {
-                delete payload.pricePerHour;
-            }
-            if (payload.shortTermPricingType !== 'FIXED') {
-                delete payload.fixedPrice;
-            }
-        }
-        return payload;
-    };
-
-    const [duplicateData, setDuplicateData] = useState<Partial<RoomFormData> | undefined>(undefined);
-
-    const handleDuplicate = (room: Room) => {
-        const data = getEditDefaultValues(room);
-        setDuplicateData({
-            ...data,
-            roomName: `${data.roomName} - copy`,
-            status: 'AVAILABLE',
-        });
-        setIsAddOpen(true);
-    };
-
-    const handleAddClose = () => {
-        setIsAddOpen(false);
-        setDuplicateData(undefined);
-    };
-
     return (
         <div className="space-y-6">
-            {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">{t('rooms.title')}</h1>
                     <p className="text-muted-foreground">{t('rooms.subtitle')}</p>
                 </div>
-                <Dialog open={isAddOpen} onOpenChange={(open) => open ? setIsAddOpen(true) : handleAddClose()}>
-                    <DialogTrigger asChild>
-                        <Button onClick={() => setDuplicateData(undefined)}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            {t('rooms.add')}
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent
-                        className="max-w-3xl"
-                        onPointerDownOutside={(e) => e.preventDefault()}
-                        onEscapeKeyDown={(e) => e.preventDefault()}
-                    >
-
-                        <DialogHeader>
-                            <DialogTitle>{t('rooms.addTitle')}</DialogTitle>
-                            <DialogDescription>{t('rooms.addDescription')}</DialogDescription>
-                        </DialogHeader>
-                        <RoomForm
-                            defaultValues={duplicateData}
-                            onSubmit={(data) => createMutation.mutate(cleanRoomData(data))}
-                            onCancel={handleAddClose}
-                            isSubmitting={createMutation.isPending}
-                            preselectedBuildingId={selectedBuildingId}
-                        />
-                    </DialogContent>
-                </Dialog>
+                <Button onClick={() => navigate('/rooms/new')}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    {t('rooms.add')}
+                </Button>
             </div>
 
-            {/* Search */}
             <div className="flex items-center gap-2">
                 <div className="relative flex-1 max-w-sm">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -445,7 +251,6 @@ export default function RoomsPage() {
                 </div>
             </div>
 
-            {/* Table */}
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
                     <div>
@@ -490,10 +295,10 @@ export default function RoomsPage() {
                                         {columnVisibility.isVisible('status') && <TableCell className="text-center">{getStatusBadge(room)}</TableCell>}
                                         <TableCell>
                                             <div className="flex items-center gap-1">
-                                                <Button variant="ghost" size="icon" onClick={() => handleEdit(room)}>
+                                                <Button variant="ghost" size="icon" onClick={() => navigate(`/rooms/${room._id}/edit`)}>
                                                     <Pencil className="h-4 w-4" />
                                                 </Button>
-                                                <Button variant="ghost" size="icon" onClick={() => handleDuplicate(room)} title={t('common.duplicate')}>
+                                                <Button variant="ghost" size="icon" onClick={() => navigate(`/rooms/new?duplicate=${room._id}`)} title={t('common.duplicate')}>
                                                     <Copy className="h-4 w-4" />
                                                 </Button>
                                                 <Button variant="ghost" size="icon" onClick={() => handleDelete(room)} className="text-destructive hover:text-destructive">
@@ -522,41 +327,12 @@ export default function RoomsPage() {
                 </CardContent>
             </Card>
 
-            {/* Edit Dialog */}
-            <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-                <DialogContent
-                    className="max-w-3xl"
-                    onPointerDownOutside={(e) => e.preventDefault()}
-                    onEscapeKeyDown={(e) => e.preventDefault()}
-                >
-
-                    <DialogHeader>
-                        <DialogTitle>{t('rooms.editTitle')}</DialogTitle>
-                        <DialogDescription>{t('rooms.editDescription')}</DialogDescription>
-                    </DialogHeader>
-                    {selectedRoom && (
-                        <RoomForm
-                            defaultValues={getEditDefaultValues(selectedRoom)}
-                            onSubmit={(data) =>
-                                updateMutation.mutate({ id: selectedRoom._id, data: cleanRoomData(data) })
-                            }
-                            onCancel={() => setIsEditOpen(false)}
-                            isSubmitting={updateMutation.isPending}
-                            isEditing={true}
-                            roomCode={selectedRoom.roomCode}
-                            currentStatus={selectedRoom.status}
-                        />
-                    )}
-                </DialogContent>
-            </Dialog>
-
             {/* Delete Dialog */}
             <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
                 <DialogContent
                     onPointerDownOutside={(e) => e.preventDefault()}
                     onEscapeKeyDown={(e) => e.preventDefault()}
                 >
-
                     <DialogHeader>
                         <DialogTitle>{t('rooms.deleteTitle')}</DialogTitle>
                         <DialogDescription>

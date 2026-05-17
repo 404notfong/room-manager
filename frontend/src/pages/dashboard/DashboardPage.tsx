@@ -1,34 +1,22 @@
 import apiClient from '@/api/client';
 import { ActivateContractDialog } from '@/components/ActivateContractDialog';
-import ContractViewModal from '@/components/ContractViewModal';
 import BigCalendar from '@/components/dashboard/BigCalendar';
 import RoomStatusOverview from '@/components/dashboard/RoomStatusOverview';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from '@/hooks/use-toast';
-import ContractForm from '@/pages/contracts/ContractForm';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Building2, DoorOpen, Receipt, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
-// Fetch contract by ID for viewing
-const fetchContract = async (contractId: string) => {
-    const response = await apiClient.get(`/contracts/${contractId}`);
-    return response.data;
-};
+import { useNavigate } from 'react-router-dom';
 
 export default function DashboardPage() {
     const { t } = useTranslation();
+    const navigate = useNavigate();
     const queryClient = useQueryClient();
 
-    // Contract modal states
-    const [isContractFormOpen, setIsContractFormOpen] = useState(false);
-    const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
-    const [isContractViewOpen, setIsContractViewOpen] = useState(false);
-    const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
-
-    // Edit & Activate states
+    // Activate states
     const [isActivateOpen, setIsActivateOpen] = useState(false);
     const [contractToActivate, setContractToActivate] = useState<{ 
         _id: string; 
@@ -36,23 +24,14 @@ export default function DashboardPage() {
         endDate?: string; 
         contractType?: string; 
         roomType?: string;
-        paymentCycleMonths?: number; // New prop
-        paymentDueDay?: number;      // New prop
+        paymentCycleMonths?: number;
+        paymentDueDay?: number;
     } | null>(null);
-    const [isEditMode, setIsEditMode] = useState(false);
-
-    // Fetch contract data when viewing or editing
-    const { data: selectedContract } = useQuery({
-        queryKey: ['contract', selectedContractId],
-        queryFn: () => fetchContract(selectedContractId!),
-        enabled: !!selectedContractId && (isContractViewOpen || isEditMode),
-    });
 
     const activateMutation = useMutation({
         mutationFn: async ({ id, data }: { id: string, data: any }) => {
             return (await apiClient.put(`/contracts/${id}/activate`, data)).data;
         },
-        // onSuccess handled via callback in component
     });
 
     const handleActivateSuccess = () => {
@@ -64,21 +43,15 @@ export default function DashboardPage() {
     };
 
     const handleCreateContract = (roomId: string) => {
-        setSelectedRoomId(roomId);
-        setIsContractFormOpen(true);
-        setIsEditMode(false);
-        setSelectedContractId(null);
+        navigate(`/contracts/new?roomId=${roomId}`);
     };
 
     const handleViewContract = (contractId: string) => {
-        setSelectedContractId(contractId);
-        setIsContractViewOpen(true);
+        navigate(`/contracts/${contractId}`);
     };
 
     const handleEditContract = (contractId: string) => {
-        setSelectedContractId(contractId);
-        setIsEditMode(true);
-        setIsContractFormOpen(true);
+        navigate(`/contracts/${contractId}/edit`);
     };
 
     const handleActivateContract = (contract: { 
@@ -129,10 +102,6 @@ export default function DashboardPage() {
         },
     ];
 
-
-
-// ... (existing imports)
-
     return (
         <div className="space-y-8">
             {/* Page Header */}
@@ -181,31 +150,6 @@ export default function DashboardPage() {
                 </TabsContent>
 
             </Tabs>
-
-            {/* Contract Form Modal */}
-            <ContractForm
-                open={isContractFormOpen}
-                onOpenChange={(open) => {
-                    setIsContractFormOpen(open);
-                    if (!open) {
-                        setSelectedRoomId(null);
-                        setIsEditMode(false);
-                        setSelectedContractId(null);
-                    }
-                }}
-                preSelectedRoomId={selectedRoomId || undefined}
-                contract={isEditMode ? selectedContract : undefined}
-            />
-
-            {/* Contract View Modal */}
-            <ContractViewModal
-                contract={selectedContract}
-                open={isContractViewOpen}
-                onOpenChange={(open) => {
-                    setIsContractViewOpen(open);
-                    if (!open) setSelectedContractId(null);
-                }}
-            />
 
             {/* Activate Contract Dialog */}
             {contractToActivate && (
