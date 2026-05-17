@@ -328,6 +328,8 @@ invoices.proRateLabel        = "Tính tiền thuê theo số tháng thực tế"
 |---|---|
 | **Payments** | `PaymentsService.create()` fetch invoice để validate và cập nhật `paidAmount` / `status` |
 | **Contracts** (`InvoiceViewModal`, `ContractViewModal`) | Hiển thị danh sách invoice của contract via `GET /invoices/contract/:id` |
+| **Tenants** | Import `InvoiceSchema` trực tiếp — query invoice history trong `getHistory()` |
+| **Calendar** | Import `InvoiceSchema` trực tiếp — đọc invoices PENDING/PARTIAL/OVERDUE để sinh `INVOICE_DUE` / `INVOICE_OVERDUE` events |
 
 ---
 

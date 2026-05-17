@@ -412,9 +412,11 @@ Invoice không được tự động sinh — người dùng tạo thủ công t
 
 | Module | Cách dùng |
 |---|---|
-| `InvoicesModule` | `contractId` FK — mỗi invoice thuộc về một contract |
-| `PaymentsModule` | Qua Invoice (invoice có contractId) |
-| `InvoicesService` | Dùng `ContractsService` để lấy contract info khi tạo invoice |
+| `InvoicesModule` | `contractId` FK — mỗi invoice thuộc về một contract; import `ContractSchema` trực tiếp |
+| `PaymentsModule` | Qua Invoice (invoice có contractId); `ContractsModule` import `PaymentSchema` trực tiếp |
+| `InvoicesService` | Dùng `ContractSchema` (import trực tiếp) để lấy contract info khi tạo invoice |
+| `TenantsModule` | Import `ContractSchema` trực tiếp — query contract history trong `getHistory()` |
+| `CalendarModule` | Import `ContractSchema` trực tiếp — đọc DRAFT/ACTIVE contracts để sinh contract events và payment due events |
 | Dashboard | Thống kê hợp đồng theo trạng thái |
 
 ---

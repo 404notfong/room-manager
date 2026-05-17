@@ -235,8 +235,11 @@ else                                   → status = PENDING
 
 | Module | Cách sử dụng |
 |---|---|
-| `InvoicesModule` | `PaymentsService` được export; `InvoiceViewModal` mở `RecordPaymentModal` |
-| `ContractsModule` | Đọc payment history khi xem contract (qua `contractId` index) |
+| `InvoicesModule` | Import `PaymentSchema` trực tiếp (không qua `PaymentsModule`) — `InvoicesService` tạo deposit payment bằng PaymentModel; `InvoiceViewModal` mở `RecordPaymentModal` ở frontend |
+| `ContractsModule` | Import `PaymentSchema` trực tiếp — đếm invoice/payment trước khi cập nhật meter index |
+| `TenantsModule` | Import `PaymentSchema` trực tiếp — query payment history trong `getHistory()` |
+
+> **Lưu ý**: `PaymentsModule` export `PaymentsService` nhưng hiện tại **không có NestJS module nào import `PaymentsModule`** ngoài `AppModule`. Các module khác dùng `PaymentSchema` trực tiếp qua `MongooseModule.forFeature`. `PaymentsService` export sẵn sàng nếu cần tích hợp sau này.
 
 ### Module chưa tích hợp (potential)
 
