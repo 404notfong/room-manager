@@ -1,0 +1,117 @@
+{
+  "planPath": "docs/superpowers/plans/2026-05-18-calendar-refactor.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 0: Backend helpers (severity + date-keys)",
+      "status": "pending",
+      "description": "**Goal:** Extract pure utility functions (toLocalDateKey, startOfLocalDay, daysBetween, computeSeverity) with unit tests before producers need them.\n\n**Files:**\n- Create: backend/src/modules/calendar/helpers/date-keys.ts\n- Create: backend/src/modules/calendar/helpers/date-keys.spec.ts\n- Create: backend/src/modules/calendar/helpers/severity.ts\n- Create: backend/src/modules/calendar/helpers/severity.spec.ts\n\n**Verify:** `cd backend && npx jest src/modules/calendar/helpers/ -v` → all PASS\n\n```json:metadata\n{\"files\": [\"backend/src/modules/calendar/helpers/date-keys.ts\", \"backend/src/modules/calendar/helpers/date-keys.spec.ts\", \"backend/src/modules/calendar/helpers/severity.ts\", \"backend/src/modules/calendar/helpers/severity.spec.ts\"], \"verifyCommand\": \"cd backend && npx jest src/modules/calendar/helpers/ -v\", \"acceptanceCriteria\": [\"toLocalDateKey returns YYYY-MM-DD in local TZ\", \"computeSeverity branches on -1/0/7/8 boundaries\", \"daysBetween handles same-day, future, past\"]}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "Task 1: Update CalendarEventDto (optional title, daysOverdue)",
+      "status": "pending",
+      "blockedBy": [0],
+      "description": "**Goal:** Mark title/description optional on CalendarEventDto and add daysOverdue?: number. Keep CONTRACT_START/END in enum for now (drop in T6).\n\n**Files:**\n- Modify: backend/src/modules/calendar/dto/calendar-event.dto.ts\n\n**Verify:** `cd backend && npm run build` → exit 0\n\n```json:metadata\n{\"files\": [\"backend/src/modules/calendar/dto/calendar-event.dto.ts\"], \"verifyCommand\": \"cd backend && npm run build\", \"acceptanceCriteria\": [\"title and description optional\", \"daysOverdue?: number added\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: ContractEventsProducer with severity by proximity",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Producer for DRAFT check-in + ACTIVE checkout events. No 7-day window. Severity computed by proximity. Skip CONTRACT_START/END emission.\n\n**Files:**\n- Create: backend/src/modules/calendar/producers/contract-events.producer.ts\n- Create: backend/src/modules/calendar/producers/contract-events.producer.spec.ts\n\n**Verify:** `cd backend && npx jest src/modules/calendar/producers/contract-events.producer.spec.ts -v` → all PASS\n\n```json:metadata\n{\"files\": [\"backend/src/modules/calendar/producers/contract-events.producer.ts\", \"backend/src/modules/calendar/producers/contract-events.producer.spec.ts\"], \"verifyCommand\": \"cd backend && npx jest src/modules/calendar/producers/contract-events.producer.spec.ts -v\", \"acceptanceCriteria\": [\"DRAFT >7d → DEPOSIT_CHECKIN_DUE info\", \"DRAFT ≤7d → DEPOSIT_CHECKIN_DUE warning\", \"past DRAFT → DEPOSIT_CHECKIN_OVERDUE danger with daysOverdue\", \"no CONTRACT_START/END emitted\", \"ACTIVE checkout symmetric\", \"buildingId filter works\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: InvoiceEventsProducer",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Producer for invoice due/overdue events, severity by proximity for DUE, DANGER for OVERDUE.\n\n**Files:**\n- Create: backend/src/modules/calendar/producers/invoice-events.producer.ts\n- Create: backend/src/modules/calendar/producers/invoice-events.producer.spec.ts\n\n**Verify:** `cd backend && npx jest src/modules/calendar/producers/invoice-events.producer.spec.ts -v` → all PASS\n\n```json:metadata\n{\"files\": [\"backend/src/modules/calendar/producers/invoice-events.producer.ts\", \"backend/src/modules/calendar/producers/invoice-events.producer.spec.ts\"], \"verifyCommand\": \"cd backend && npx jest src/modules/calendar/producers/invoice-events.producer.spec.ts -v\", \"acceptanceCriteria\": [\"INVOICE_DUE emitted for future dueDate\", \"INVOICE_OVERDUE with daysOverdue for past\", \"buildingId filter works\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: PaymentDueProducer with invoice dedupe",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Generate PAYMENT_DUE reminders. Suppress when invoice with matching (contractId, billingPeriod.year/month) exists. Multi-month cycles + payDay clamping supported.\n\n**Files:**\n- Create: backend/src/modules/calendar/producers/payment-due.producer.ts\n- Create: backend/src/modules/calendar/producers/payment-due.producer.spec.ts\n\n**Verify:** `cd backend && npx jest src/modules/calendar/producers/payment-due.producer.spec.ts -v` → all PASS\n\n```json:metadata\n{\"files\": [\"backend/src/modules/calendar/producers/payment-due.producer.ts\", \"backend/src/modules/calendar/producers/payment-due.producer.spec.ts\"], \"verifyCommand\": \"cd backend && npx jest src/modules/calendar/producers/payment-due.producer.spec.ts -v\", \"acceptanceCriteria\": [\"PAYMENT_DUE emitted on payDay of cycle months\", \"suppressed when invoice exists for (contractId, month, year)\", \"PAYMENT_DUE_OVERDUE DANGER for past\", \"multi-month cycle respected\", \"payDay clamped to last day of month\"]}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 5: CalendarService orchestrator + module wiring + /overdue endpoint",
+      "status": "pending",
+      "blockedBy": [2, 3, 4],
+      "description": "**Goal:** Rewrite calendar.service.ts as thin orchestrator over the 3 producers. Add getOverdue. Wire producers in module. Add GET /calendar/overdue.\n\n**Files:**\n- Modify: backend/src/modules/calendar/calendar.service.ts (rewrite)\n- Modify: backend/src/modules/calendar/calendar.module.ts\n- Modify: backend/src/modules/calendar/calendar.controller.ts\n- Create: backend/src/modules/calendar/calendar.service.spec.ts\n\n**Verify:** `cd backend && npm run build && npx jest src/modules/calendar/ -v` → all PASS\n\n```json:metadata\n{\"files\": [\"backend/src/modules/calendar/calendar.service.ts\", \"backend/src/modules/calendar/calendar.module.ts\", \"backend/src/modules/calendar/calendar.controller.ts\", \"backend/src/modules/calendar/calendar.service.spec.ts\"], \"verifyCommand\": \"cd backend && npm run build && npx jest src/modules/calendar/ -v\", \"acceptanceCriteria\": [\"service < 120 lines\", \"getEventsInRange + getEventsByDay + getMonthSummary + getOverdue defined\", \"getOverdue returns DANGER only, desc order\", \"/overdue endpoint exposed\"]}\n```"
+    },
+    {
+      "id": 6,
+      "subject": "Task 6: Drop CONTRACT_START/END from enum + i18n updates",
+      "status": "pending",
+      "blockedBy": [5],
+      "description": "**Goal:** Now safe to drop the two unused enum values + add overdue/shortLabel i18n keys + retitle PAYMENT_DUE.\n\n**Files:**\n- Modify: backend/src/modules/calendar/dto/calendar-event.dto.ts\n- Modify: frontend/public/locales/vi/translation.json\n- Modify: frontend/public/locales/en/translation.json\n\n**Verify:** `cd backend && npm run build` → exit 0\n\n```json:metadata\n{\"files\": [\"backend/src/modules/calendar/dto/calendar-event.dto.ts\", \"frontend/public/locales/vi/translation.json\", \"frontend/public/locales/en/translation.json\"], \"verifyCommand\": \"cd backend && npm run build\", \"acceptanceCriteria\": [\"enum has 8 values\", \"shortLabels.* added for 8 types\", \"overdue.bannerCount/viewAll/modalTitle added\", \"PAYMENT_DUE reworded\"]}\n```"
+    },
+    {
+      "id": 7,
+      "subject": "Task 7: Frontend lib (event-colors, event-display, grid-helpers)",
+      "status": "pending",
+      "blockedBy": [6],
+      "description": "**Goal:** Centralize EVENT_COLORS, event-display label composition, and month-grid building into lib/calendar/. Update api/calendar.ts to drop CONTRACT_START/END type union and add getOverdue.\n\n**Files:**\n- Create: frontend/src/lib/calendar/event-colors.ts\n- Create: frontend/src/lib/calendar/event-display.ts\n- Create: frontend/src/lib/calendar/event-display.test.ts\n- Create: frontend/src/lib/calendar/grid-helpers.ts\n- Create: frontend/src/lib/calendar/grid-helpers.test.ts\n- Modify: frontend/src/api/calendar.ts\n\n**Verify:** `cd frontend && npx vitest run src/lib/calendar/` → all PASS\n\n```json:metadata\n{\"files\": [\"frontend/src/lib/calendar/event-colors.ts\", \"frontend/src/lib/calendar/event-display.ts\", \"frontend/src/lib/calendar/event-display.test.ts\", \"frontend/src/lib/calendar/grid-helpers.ts\", \"frontend/src/lib/calendar/grid-helpers.test.ts\", \"frontend/src/api/calendar.ts\"], \"verifyCommand\": \"cd frontend && npx vitest run src/lib/calendar/\", \"acceptanceCriteria\": [\"EVENT_COLORS has 8 entries with bar classes\", \"composeEventBarLabel handles N/A roomName\", \"buildMonthGrid returns 35 or 42 cells starting Monday\", \"calendar.ts type union drops CONTRACT_START/END\", \"calendarApi.getOverdue added\"]}\n```"
+    },
+    {
+      "id": 8,
+      "subject": "Task 8: useCalendarData hook with eventsByDay derivation",
+      "status": "pending",
+      "blockedBy": [7],
+      "description": "**Goal:** Hook fetching events for visible month, day events, and overdue. Memoizes eventsByDay Record<yyyy-MM-dd, CalendarEvent[]>.\n\n**Files:**\n- Create: frontend/src/components/dashboard/calendar/hooks/useCalendarData.ts\n\n**Verify:** `cd frontend && npm run build` → exit 0\n\n```json:metadata\n{\"files\": [\"frontend/src/components/dashboard/calendar/hooks/useCalendarData.ts\"], \"verifyCommand\": \"cd frontend && npm run build\", \"acceptanceCriteria\": [\"returns eventsQuery, eventsByDay, dayEventsQuery, overdueQuery\", \"eventsByDay memoized from eventsQuery.data\", \"dayEventsQuery gated on selectedDate && isDayModalOpen\"]}\n```"
+    },
+    {
+      "id": 9,
+      "subject": "Task 9: CalendarHeader + CalendarDayCell components",
+      "status": "pending",
+      "blockedBy": [7],
+      "description": "**Goal:** Header (Today/Prev/Next/Month) + day cell with stacked event bars (Option B). Max 4 bars + +N nữa. Counter shows plain event count.\n\n**Files:**\n- Create: frontend/src/components/dashboard/calendar/CalendarHeader.tsx\n- Create: frontend/src/components/dashboard/calendar/CalendarDayCell.tsx\n\n**Verify:** `cd frontend && npm run build` → exit 0\n\n```json:metadata\n{\"files\": [\"frontend/src/components/dashboard/calendar/CalendarHeader.tsx\", \"frontend/src/components/dashboard/calendar/CalendarDayCell.tsx\"], \"verifyCommand\": \"cd frontend && npm run build\", \"acceptanceCriteria\": [\"DayCell: max 4 bars + overflow chip\", \"DayCell: counter = events.length\", \"DayCell: outside-month opacity-45\", \"DayCell: today bg-primary/8 + circle bg-primary\"]}\n```"
+    },
+    {
+      "id": 10,
+      "subject": "Task 10: CalendarGrid component",
+      "status": "pending",
+      "blockedBy": [8, 9],
+      "description": "**Goal:** 7-col weekday header + cells from buildMonthGrid. Each cell = CalendarDayCell with computed isToday/isOutsideMonth.\n\n**Files:**\n- Create: frontend/src/components/dashboard/calendar/CalendarGrid.tsx\n\n**Verify:** `cd frontend && npm run build` → exit 0\n\n```json:metadata\n{\"files\": [\"frontend/src/components/dashboard/calendar/CalendarGrid.tsx\"], \"verifyCommand\": \"cd frontend && npm run build\", \"acceptanceCriteria\": [\"weekday header 7 cells\", \"grid cells from buildMonthGrid\", \"events looked up by yyyy-MM-dd key\"]}\n```"
+    },
+    {
+      "id": 11,
+      "subject": "Task 11: CalendarEventCard (shared)",
+      "status": "pending",
+      "blockedBy": [7],
+      "description": "**Goal:** Reusable event card used in both DayDetailModal and OverdueListModal. Uses composeEventTitle/Description; inline-flex meta (not grid); skips N/A values.\n\n**Files:**\n- Create: frontend/src/components/dashboard/calendar/CalendarEventCard.tsx\n\n**Verify:** `cd frontend && npm run build` → exit 0\n\n```json:metadata\n{\"files\": [\"frontend/src/components/dashboard/calendar/CalendarEventCard.tsx\"], \"verifyCommand\": \"cd frontend && npm run build\", \"acceptanceCriteria\": [\"severity strip via border-l\", \"meta flex flex-wrap (not grid)\", \"N/A values skipped\", \"CTA navigates via onView callback\"]}\n```"
+    },
+    {
+      "id": 12,
+      "subject": "Task 12: CalendarDayDetailModal",
+      "status": "pending",
+      "blockedBy": [11],
+      "description": "**Goal:** Day-detail modal with header (CalendarDays icon + date) and list of CalendarEventCard. Handles loading/empty states.\n\n**Files:**\n- Create: frontend/src/components/dashboard/calendar/CalendarDayDetailModal.tsx\n\n**Verify:** `cd frontend && npm run build` → exit 0\n\n```json:metadata\n{\"files\": [\"frontend/src/components/dashboard/calendar/CalendarDayDetailModal.tsx\"], \"verifyCommand\": \"cd frontend && npm run build\", \"acceptanceCriteria\": [\"shows LoadingState when isLoading\", \"shows CompactEmptyState when empty\", \"renders CalendarEventCard per event\", \"max-h-[420px] scroll\"]}\n```"
+    },
+    {
+      "id": 13,
+      "subject": "Task 13: OverdueBanner + OverdueListModal",
+      "status": "pending",
+      "blockedBy": [11],
+      "description": "**Goal:** Strip banner above grid (hidden when count=0) + modal listing all overdue events via CalendarEventCard.\n\n**Files:**\n- Create: frontend/src/components/dashboard/calendar/OverdueBanner.tsx\n- Create: frontend/src/components/dashboard/calendar/OverdueListModal.tsx\n\n**Verify:** `cd frontend && npm run build` → exit 0\n\n```json:metadata\n{\"files\": [\"frontend/src/components/dashboard/calendar/OverdueBanner.tsx\", \"frontend/src/components/dashboard/calendar/OverdueListModal.tsx\"], \"verifyCommand\": \"cd frontend && npm run build\", \"acceptanceCriteria\": [\"banner returns null when count=0\", \"banner: bg-error/10 + AlertTriangle + viewAll button\", \"modal lists all events via EventCard\"]}\n```"
+    },
+    {
+      "id": 14,
+      "subject": "Task 14: New BigCalendar orchestrator + delete old file",
+      "status": "pending",
+      "blockedBy": [10, 12, 13],
+      "description": "**Goal:** Compose all components into thin BigCalendar.tsx (<100 lines), update DashboardPage import, delete old BigCalendar.tsx.\n\n**Files:**\n- Create: frontend/src/components/dashboard/calendar/BigCalendar.tsx\n- Delete: frontend/src/components/dashboard/BigCalendar.tsx\n- Modify: frontend/src/pages/dashboard/DashboardPage.tsx (line 2)\n\n**Verify:** `cd frontend && npm run build && npx vitest run` → all PASS\n\n```json:metadata\n{\"files\": [\"frontend/src/components/dashboard/calendar/BigCalendar.tsx\", \"frontend/src/components/dashboard/BigCalendar.tsx\", \"frontend/src/pages/dashboard/DashboardPage.tsx\"], \"verifyCommand\": \"cd frontend && npm run build && npx vitest run\", \"acceptanceCriteria\": [\"new BigCalendar.tsx < 100 lines\", \"DashboardPage import updated\", \"old BigCalendar.tsx deleted\", \"no CONTRACT_START/END refs in frontend/src/\"]}\n```"
+    },
+    {
+      "id": 15,
+      "subject": "Task 15: Manual verification + screenshot evidence",
+      "status": "pending",
+      "blockedBy": [14],
+      "description": "**Goal:** Start dev servers, exercise the feature in browser, verify acceptance criteria from spec section 7.\n\n**Files:** (no changes — verification only)\n\n**Verify:** `wc -l frontend/src/components/dashboard/calendar/BigCalendar.tsx backend/src/modules/calendar/calendar.service.ts` → both < target (100/120)\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"wc -l frontend/src/components/dashboard/calendar/BigCalendar.tsx backend/src/modules/calendar/calendar.service.ts\", \"acceptanceCriteria\": [\"backend + frontend servers start clean\", \"counter matches modal count\", \"padding days visible+clickable+opacity-45\", \"no legend strip\", \"navigating month +2 shows DEPOSIT_CHECKIN_DUE info (not CONTRACT_START)\", \"overdue banner shows when applicable\", \"FE BigCalendar < 100 lines, BE service < 120 lines\", \"VN ↔ EN switch updates all labels\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-05-18T00:00:00Z"
+}
