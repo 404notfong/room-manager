@@ -66,4 +66,17 @@ export class CalendarController {
             buildingId,
         );
     }
+
+    /**
+     * Get all currently overdue events
+     * GET /calendar/overdue?buildingId=
+     */
+    @Get('overdue')
+    async getOverdue(
+        @Query('buildingId') buildingId: string,
+        @Req() req: any,
+    ) {
+        const ownerId = req.user.userId;
+        return this.calendarService.getOverdue(ownerId, buildingId);
+    }
 }

@@ -4,6 +4,9 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { CalendarController } from './calendar.controller';
 import { CalendarService } from './calendar.service';
+import { ContractEventsProducer } from './producers/contract-events.producer';
+import { InvoiceEventsProducer } from './producers/invoice-events.producer';
+import { PaymentDueProducer } from './producers/payment-due.producer';
 
 @Module({
     imports: [
@@ -13,7 +16,12 @@ import { CalendarService } from './calendar.service';
         ]),
     ],
     controllers: [CalendarController],
-    providers: [CalendarService],
+    providers: [
+        CalendarService,
+        ContractEventsProducer,
+        InvoiceEventsProducer,
+        PaymentDueProducer,
+    ],
     exports: [CalendarService],
 })
-export class CalendarModule { }
+export class CalendarModule {}
