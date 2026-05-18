@@ -1,6 +1,6 @@
 import apiClient from '@/api/client';
 import { ActivateContractDialog } from '@/components/ActivateContractDialog';
-import BigCalendar from '@/components/dashboard/BigCalendar';
+import BigCalendar from '@/components/dashboard/calendar/BigCalendar';
 import RoomStatusOverview from '@/components/dashboard/RoomStatusOverview';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";

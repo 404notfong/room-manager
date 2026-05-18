@@ -57,7 +57,9 @@
         "time": "time",
         "months": "month(s)",
         "optional": "Optional",
-        "actions": "Actions"
+        "actions": "Actions",
+        "previousMonth": "Previous month",
+        "nextMonth": "Next month"
     },
     "errors": {
         "tooManyRequests": "Too many requests. Please try again in {{seconds}} seconds.",
@@ -793,27 +795,36 @@
     },
     "calendar": {
         "title": "Calendar",
-        "subtitle": "View important scheduled events",
         "noEvents": "No events",
-        "eventsCount": "{{count}} events",
         "today": "Today",
-        "viewDay": "View details",
         "viewContract": "View contract",
         "viewInvoice": "View invoice",
         "eventTypes": {
-            "CONTRACT_START": "Contract starts",
-            "CONTRACT_END": "Contract ends",
-            "DEPOSIT_CHECKIN_DUE": "Upcoming check-in",
-            "DEPOSIT_CHECKIN_OVERDUE": "Overdue check-in",
-            "ACTIVE_CHECKOUT_DUE": "Upcoming checkout",
-            "ACTIVE_CHECKOUT_OVERDUE": "Overdue checkout",
+            "DEPOSIT_CHECKIN_DUE": "Check-in upcoming",
+            "DEPOSIT_CHECKIN_OVERDUE": "Check-in overdue",
+            "ACTIVE_CHECKOUT_DUE": "Checkout upcoming",
+            "ACTIVE_CHECKOUT_OVERDUE": "Checkout overdue",
             "INVOICE_DUE": "Invoice due",
             "INVOICE_OVERDUE": "Invoice overdue",
-            "PAYMENT_DUE": "Payment reminder",
+            "PAYMENT_DUE": "Collection cycle — create invoice",
             "PAYMENT_DUE_OVERDUE": "Payment overdue"
         },
-        "daysLeft": "{{days}} days left",
-        "overdueDays": "{{days}} days overdue",
-        "amount": "Amount"
+        "shortLabels": {
+            "DEPOSIT_CHECKIN_DUE": "Check-in",
+            "DEPOSIT_CHECKIN_OVERDUE": "Check-in overdue",
+            "ACTIVE_CHECKOUT_DUE": "Checkout",
+            "ACTIVE_CHECKOUT_OVERDUE": "Checkout overdue",
+            "INVOICE_DUE": "Invoice due",
+            "INVOICE_OVERDUE": "Invoice overdue",
+            "PAYMENT_DUE": "Collection cycle",
+            "PAYMENT_DUE_OVERDUE": "Payment overdue"
+        },
+        "loadingEvents": "Loading events",
+        "noEventsTitle": "No events",
+        "overdue": {
+            "bannerCount": "You have {{count}} overdue events",
+            "viewAll": "View details",
+            "modalTitle": "Overdue events"
+        }
     }
 }

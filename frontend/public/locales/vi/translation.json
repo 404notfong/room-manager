@@ -58,7 +58,9 @@
         "time": "lần",
         "months": "tháng",
         "optional": "Tùy chọn",
-        "actions": "Thao tác"
+        "actions": "Thao tác",
+        "previousMonth": "Tháng trước",
+        "nextMonth": "Tháng sau"
     },
     "errors": {
         "tooManyRequests": "Quá nhiều yêu cầu. Vui lòng thử lại sau {{seconds}} giây.",
@@ -795,27 +797,36 @@
     },
     "calendar": {
         "title": "Lịch",
-        "subtitle": "Xem lịch các sự kiện quan trọng",
         "noEvents": "Không có sự kiện",
-        "eventsCount": "{{count}} sự kiện",
         "today": "Hôm nay",
-        "viewDay": "Xem chi tiết",
         "viewContract": "Xem hợp đồng",
         "viewInvoice": "Xem hóa đơn",
         "eventTypes": {
-            "CONTRACT_START": "Hợp đồng bắt đầu",
-            "CONTRACT_END": "Hợp đồng kết thúc",
             "DEPOSIT_CHECKIN_DUE": "Sắp check-in",
             "DEPOSIT_CHECKIN_OVERDUE": "Quá hạn check-in",
             "ACTIVE_CHECKOUT_DUE": "Sắp checkout",
             "ACTIVE_CHECKOUT_OVERDUE": "Quá hạn checkout",
             "INVOICE_DUE": "Hóa đơn đến hạn",
             "INVOICE_OVERDUE": "Hóa đơn quá hạn",
-            "PAYMENT_DUE": "Nhắc thanh toán",
+            "PAYMENT_DUE": "Tới kỳ thu — tạo hóa đơn",
             "PAYMENT_DUE_OVERDUE": "Quá hạn thanh toán"
         },
-        "daysLeft": "Còn {{days}} ngày",
-        "overdueDays": "Quá hạn {{days}} ngày",
-        "amount": "Số tiền"
+        "shortLabels": {
+            "DEPOSIT_CHECKIN_DUE": "Check-in",
+            "DEPOSIT_CHECKIN_OVERDUE": "Check-in quá hạn",
+            "ACTIVE_CHECKOUT_DUE": "Checkout",
+            "ACTIVE_CHECKOUT_OVERDUE": "Checkout quá hạn",
+            "INVOICE_DUE": "Hóa đơn đến hạn",
+            "INVOICE_OVERDUE": "Hóa đơn quá hạn",
+            "PAYMENT_DUE": "Tới kỳ thu",
+            "PAYMENT_DUE_OVERDUE": "Quá hạn thanh toán"
+        },
+        "loadingEvents": "Đang tải sự kiện",
+        "noEventsTitle": "Không có sự kiện",
+        "overdue": {
+            "bannerCount": "Bạn có {{count}} sự kiện quá hạn",
+            "viewAll": "Xem chi tiết",
+            "modalTitle": "Sự kiện quá hạn"
+        }
     }
 }
