@@ -126,4 +126,39 @@ describe('PaymentDueProducer', () => {
         expect(events[0].date.getDate()).toBe(28);
         jest.useRealTimers();
     });
+
+    it('clamps paymentDueDay outside [1, 31] to safe bounds', async () => {
+        jest.useFakeTimers().setSystemTime(new Date('2026-05-01'));
+        setContracts([
+            makeContract({ paymentDueDay: 0 }),    // edge: should clamp to 1
+            makeContract({ paymentDueDay: 35 }),   // edge: should clamp to 31 → then to monthEnd
+            makeContract({ paymentDueDay: -3 }),   // edge: negative → clamp to 1
+        ]);
+        const events = await producer.produce(ownerId, may);
+        expect(events).toHaveLength(3);
+        // All payment dates should be valid days (1-31), not negative or rolled backward
+        for (const event of events) {
+            const day = event.date.getDate();
+            expect(day).toBeGreaterThanOrEqual(1);
+            expect(day).toBeLessThanOrEqual(31);
+        }
+        jest.useRealTimers();
+    });
+
+    it('emits OVERDUE for past cycles and DUE for future cycles in a multi-cycle contract', async () => {
+        jest.useFakeTimers().setSystemTime(new Date('2026-08-01'));
+        setContracts([makeContract({
+            startDate: new Date('2026-01-01'),
+            paymentCycleMonths: 3,
+            paymentDueDay: 1,
+        })]);
+        const yearRange = { start: new Date('2026-01-01'), end: new Date('2026-12-31T23:59:59Z') };
+        const events = await producer.produce(ownerId, yearRange);
+        expect(events).toHaveLength(3);
+        // First cycle ends at 2026-04-01 (overdue from Aug 1), second at 2026-07-01 (overdue), third at 2026-10-01 (future)
+        expect(events[0].type).toBe(CalendarEventType.PAYMENT_DUE_OVERDUE);
+        expect(events[1].type).toBe(CalendarEventType.PAYMENT_DUE_OVERDUE);
+        expect(events[2].type).toBe(CalendarEventType.PAYMENT_DUE);
+        jest.useRealTimers();
+    });
 });

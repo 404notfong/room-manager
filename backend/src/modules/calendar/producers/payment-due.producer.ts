@@ -75,18 +75,33 @@ export class PaymentDueProducer {
             23, 59, 59, 999,
         );
 
+        // Symmetric to rangeEndLocal: anchor lower bound at the UTC calendar date
+        // of range.start, expressed at local start-of-day. Prevents day-1 payments
+        // from being silently dropped when range.start arrives as 'YYYY-MM-DDT00:00:00Z'
+        // in a positive-offset timezone.
+        const rangeStartLocal = new Date(
+            range.start.getUTCFullYear(),
+            range.start.getUTCMonth(),
+            range.start.getUTCDate(),
+            0, 0, 0, 0,
+        );
+
         for (const contract of filteredContracts as any[]) {
             const room = contract.roomId;
             const tenant = contract.tenantId;
             const cycleMonths = contract.paymentCycleMonths || 1;
-            const payDay = contract.paymentDueDay || 1;
+            const rawPayDay = contract.paymentDueDay || 1;
+            const payDay = Math.max(1, Math.min(31, rawPayDay));
             const contractStart = new Date(contract.startDate);
 
             const firstYear = contractStart.getFullYear();
             const firstMonth = contractStart.getMonth() + cycleMonths;
             const cursor = new Date(firstYear, firstMonth, 1);
 
-            const maxIterations = 240;
+            // Cap iterations defensively at (range span in months / cycleMonths) + 12 slack.
+            const rangeSpanMonths = (rangeEndLocal.getFullYear() - cursor.getFullYear()) * 12
+                + (rangeEndLocal.getMonth() - cursor.getMonth()) + 1;
+            const maxIterations = Math.max(12, Math.ceil(rangeSpanMonths / cycleMonths) + 12);
             let i = 0;
 
             while (cursor <= rangeEndLocal && i < maxIterations) {
@@ -97,7 +112,7 @@ export class PaymentDueProducer {
                 const clampedDay = Math.min(payDay, lastDay);
                 const paymentDate = new Date(year, month, clampedDay);
 
-                if (paymentDate >= range.start && paymentDate <= rangeEndLocal) {
+                if (paymentDate >= rangeStartLocal && paymentDate <= rangeEndLocal) {
                     const billingMonth = month + 1;
                     const key = `${contract._id}:${year}:${billingMonth}`;
                     const invoiceExists = invoiceKeys.has(key);
