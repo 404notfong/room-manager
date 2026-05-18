@@ -28,7 +28,7 @@ export class CalendarEventDto {
     _id: string;
     date: Date;
     type: CalendarEventType;
-    title: string;
+    title?: string;
     description?: string;
     severity: CalendarEventSeverity;
     relatedId: string;
@@ -37,6 +37,7 @@ export class CalendarEventDto {
     tenantName?: string;
     buildingName?: string;
     amount?: number;
+    daysOverdue?: number;
 }
 
 export class GetCalendarEventsDto {
