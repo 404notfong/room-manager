@@ -1,0 +1,40 @@
+{
+  "planPath": "docs/superpowers/plans/2026-05-17-feature-playbook.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 0: Pre-flight Setup",
+      "status": "completed",
+      "description": "**Goal:** Create docs/features/ and docs/archive/ dirs, move V1 overview docs to archive, scaffold README index.\n\n**Files:**\n- Create dir: docs/features/\n- Create dir: docs/archive/\n- Move: docs/PROJECT-OVERVIEW.md -> docs/archive/\n- Move: docs/V2-OVERVIEW.md -> docs/archive/\n- Create: docs/features/README.md\n\n**Verify:** `ls docs/features/ docs/archive/ && git log -1 --stat`\n\n```json:metadata\n{\"files\": [\"docs/features/README.md\", \"docs/archive/PROJECT-OVERVIEW.md\", \"docs/archive/V2-OVERVIEW.md\"], \"verifyCommand\": \"ls docs/features/ docs/archive/\", \"acceptanceCriteria\": [\"dirs exist\", \"V1 docs moved\", \"README skeleton with 12 rows\", \"1 commit\"]}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "Task 1: Parallel Subagent Dispatch - Generate 12 Playbooks",
+      "status": "completed",
+      "blockedBy": [0],
+      "description": "**Goal:** Dispatch 12 general-purpose subagents in 1 message; each reads 1 module code and writes docs/features/<module>.md per 7-section template.\n\n**Files:** Create docs/features/{auth,users,buildings,room-groups,rooms,tenants,services,contracts,invoices,payments,notifications,calendar}.md\n\n**Verify:** `ls docs/features/*.md | wc -l` => 13; `grep -lE 'TBD|FIXME' docs/features/` => empty\n\n```json:metadata\n{\"files\": [\"docs/features/auth.md\",\"docs/features/users.md\",\"docs/features/buildings.md\",\"docs/features/room-groups.md\",\"docs/features/rooms.md\",\"docs/features/tenants.md\",\"docs/features/services.md\",\"docs/features/contracts.md\",\"docs/features/invoices.md\",\"docs/features/payments.md\",\"docs/features/notifications.md\",\"docs/features/calendar.md\"], \"verifyCommand\": \"ls docs/features/*.md | wc -l && grep -lE 'TBD|FIXME' docs/features/\", \"acceptanceCriteria\": [\"12 files created\", \"7 sections each\", \"250-700 lines\", \"no TBD/FIXME\", \"edge cases per module pinned in spec\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: Cross-Reference Consistency Pass",
+      "status": "completed",
+      "blockedBy": [1],
+      "description": "**Goal:** Verify Section 6 cross-module deps are symmetric; section structure uniform; spot-check enums/routes/i18n.\n\n**Files:** Modify (only if asymmetry found) any docs/features/*.md\n\n**Verify:** Manual review + `for f in docs/features/*.md; do echo \"$f: $(grep -c '^## ' $f) sections\"; done`\n\n```json:metadata\n{\"files\": [\"docs/features/*.md (only if mismatch)\"], \"verifyCommand\": \"for f in docs/features/[!R]*.md; do echo \\\"$f: $(grep -c '^## ' $f)\\\"; done\", \"acceptanceCriteria\": [\"symmetric deps\", \"7 sections per file\", \"spot-checks pass\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: Finalize README Index",
+      "status": "completed",
+      "blockedBy": [2],
+      "description": "**Goal:** Replace TBD in docs/features/README.md with 1-line summaries extracted from each playbook's 'Vai tro trong domain' line.\n\n**Files:** Modify docs/features/README.md\n\n**Verify:** `grep TBD docs/features/README.md` => empty\n\n```json:metadata\n{\"files\": [\"docs/features/README.md\"], \"verifyCommand\": \"grep TBD docs/features/README.md\", \"acceptanceCriteria\": [\"no TBD remaining\", \"12 rows have summaries\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: Final Verification",
+      "status": "completed",
+      "blockedBy": [3],
+      "description": "**Goal:** Run spec verification checklist, manual spot-check 2 random playbook files, report final summary.\n\n**Files:** None modified (except fix commit if spot-check fails)\n\n**Verify:** `git log --oneline -6` shows docs(features) commits\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"ls docs/features/ && ls docs/archive/ && grep -lE 'TBD|FIXME' docs/features/ && git log --oneline -6\", \"acceptanceCriteria\": [\"13 files in features\", \"archive populated\", \"no placeholders\", \"3-4 commits\", \"spot-checks pass\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-05-17T14:30:00Z"
+}
