@@ -102,8 +102,8 @@ describe('ContractEventsProducer', () => {
         ]);
         const events = await producer.produce(ownerId, range);
         const types = events.map(e => e.type);
-        expect(types).not.toContain(CalendarEventType.CONTRACT_START);
-        expect(types).not.toContain(CalendarEventType.CONTRACT_END);
+        expect(types).not.toContain('CONTRACT_START');
+        expect(types).not.toContain('CONTRACT_END');
         jest.useRealTimers();
     });
 
