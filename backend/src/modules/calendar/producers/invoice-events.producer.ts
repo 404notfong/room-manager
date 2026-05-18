@@ -1,3 +1,4 @@
+import { InvoiceStatus } from '@common/constants/enums';
 import { Invoice, InvoiceDocument } from '@modules/invoices/schemas/invoice.schema';
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
@@ -24,7 +25,7 @@ export class InvoiceEventsProducer {
                 ownerId: new Types.ObjectId(ownerId),
                 isDeleted: { $ne: true },
                 dueDate: { $gte: range.start, $lte: range.end },
-                status: { $in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
+                status: { $in: [InvoiceStatus.PENDING, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE] },
             })
             .populate({
                 path: 'roomId',

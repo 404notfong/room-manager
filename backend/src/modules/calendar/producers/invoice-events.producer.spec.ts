@@ -13,7 +13,7 @@ function makeInvoice(overrides: any) {
         dueDate: new Date('2026-05-10'),
         remainingAmount: 1500000,
         status: 'PENDING',
-        roomId: { _id: new Types.ObjectId(), name: 'P101', buildingId: { _id: new Types.ObjectId(), name: 'Toa A' } },
+        roomId: { _id: new Types.ObjectId(), roomName: 'P101', buildingId: { _id: new Types.ObjectId(), name: 'Toa A' } },
         tenantId: { _id: new Types.ObjectId(), name: 'Khach 1' },
         ...overrides,
     };
@@ -55,6 +55,7 @@ describe('InvoiceEventsProducer', () => {
         expect(events[0].type).toBe(CalendarEventType.INVOICE_DUE);
         expect(events[0].severity).toBe(CalendarEventSeverity.INFO);
         expect(events[0].amount).toBe(1500000);
+        expect(events[0].roomName).toBe('P101');
         jest.useRealTimers();
     });
 
@@ -72,11 +73,22 @@ describe('InvoiceEventsProducer', () => {
         const target = new Types.ObjectId();
         const other = new Types.ObjectId();
         setInvoices([
-            makeInvoice({ roomId: { _id: new Types.ObjectId(), name: 'P101', buildingId: { _id: target, name: 'A' } } }),
-            makeInvoice({ roomId: { _id: new Types.ObjectId(), name: 'P201', buildingId: { _id: other, name: 'B' } } }),
+            makeInvoice({ roomId: { _id: new Types.ObjectId(), roomName: 'P101', buildingId: { _id: target, name: 'A' } } }),
+            makeInvoice({ roomId: { _id: new Types.ObjectId(), roomName: 'P201', buildingId: { _id: other, name: 'B' } } }),
         ]);
         const events = await producer.produce(ownerId, range, target.toString());
         expect(events).toHaveLength(1);
         expect(events[0].roomName).toBe('P101');
+    });
+
+    it('filters out invoices with remainingAmount <= 0', async () => {
+        jest.useFakeTimers().setSystemTime(new Date('2026-05-05'));
+        setInvoices([
+            makeInvoice({ remainingAmount: 0 }),
+            makeInvoice({ remainingAmount: -500 }), // edge: negative
+        ]);
+        const events = await producer.produce(ownerId, range);
+        expect(events).toHaveLength(0);
+        jest.useRealTimers();
     });
 });
