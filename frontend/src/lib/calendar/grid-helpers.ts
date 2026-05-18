@@ -19,7 +19,8 @@ export function buildMonthGrid(date: Date): MonthGridCell[] {
     const leadingDays = (getDay(monthStart) + 6) % 7;
     const totalDaysInMonth = monthEnd.getDate();
 
-    const totalCells = Math.ceil((leadingDays + totalDaysInMonth) / 7) * 7;
+    const minCells = 35; // ensure 5+ rows minimum, never a 4-row grid
+    const totalCells = Math.max(minCells, Math.ceil((leadingDays + totalDaysInMonth) / 7) * 7);
     const cells: MonthGridCell[] = [];
 
     const firstCellDate = addDays(monthStart, -leadingDays);

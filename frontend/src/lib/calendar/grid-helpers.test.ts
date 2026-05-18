@@ -28,4 +28,10 @@ describe('buildMonthGrid', () => {
         // grid[0] should be a Monday — getDay() returns 1 for Monday
         expect(grid[0].date.getDay()).toBe(1);
     });
+
+    it('returns at least 35 cells even for a Monday-start 28-day February', () => {
+        // Feb 2027 starts on Monday, has 28 days → without the floor, would be 28 cells
+        const grid = buildMonthGrid(new Date(2027, 1, 1));
+        expect(grid.length).toBe(35);
+    });
 });
