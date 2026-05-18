@@ -57,7 +57,9 @@
         "time": "time",
         "months": "month(s)",
         "optional": "Optional",
-        "actions": "Actions"
+        "actions": "Actions",
+        "previousMonth": "Previous month",
+        "nextMonth": "Next month"
     },
     "errors": {
         "tooManyRequests": "Too many requests. Please try again in {{seconds}} seconds.",
@@ -793,11 +795,8 @@
     },
     "calendar": {
         "title": "Calendar",
-        "subtitle": "View important events",
         "noEvents": "No events",
-        "eventCount": "{{count}} events",
         "today": "Today",
-        "viewDay": "View details",
         "viewContract": "View contract",
         "viewInvoice": "View invoice",
         "eventTypes": {
@@ -820,12 +819,7 @@
             "PAYMENT_DUE": "Collection cycle",
             "PAYMENT_DUE_OVERDUE": "Payment overdue"
         },
-        "daysLeft": "{{days}} days remaining",
-        "overdueDays": "{{days}} days overdue",
-        "daysOverdueShort": "{{days}}d overdue",
-        "amount": "Amount",
         "loadingEvents": "Loading events",
-        "noEventsShort": "No events",
         "noEventsTitle": "No events",
         "overdue": {
             "bannerCount": "You have {{count}} overdue events",

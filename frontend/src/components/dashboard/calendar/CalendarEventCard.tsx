@@ -5,6 +5,12 @@ import { composeEventTitle, composeEventDescription } from '@/lib/calendar/event
 import { ExternalLink } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+const SEVERITY_BORDER_CLASS: Record<string, string> = {
+    danger: 'border-l-error',
+    warning: 'border-l-warning',
+    info: 'border-l-info',
+};
+
 interface CalendarEventCardProps {
     event: CalendarEvent;
     onView?: (event: CalendarEvent) => void;
@@ -13,6 +19,7 @@ interface CalendarEventCardProps {
 export default function CalendarEventCard({ event, onView }: CalendarEventCardProps) {
     const { t, i18n } = useTranslation();
     const colors = EVENT_COLORS[event.type];
+    const borderClass = SEVERITY_BORDER_CLASS[event.severity] ?? 'border-l-info';
     const ctaLabel = event.relatedType === 'contract'
         ? t('calendar.viewContract', 'Xem hợp đồng')
         : t('calendar.viewInvoice', 'Xem hóa đơn');
@@ -29,7 +36,7 @@ export default function CalendarEventCard({ event, onView }: CalendarEventCardPr
     }
 
     return (
-        <div className="rounded-2xl border border-border/70 bg-background/80 p-4 border-l-[4px]" style={{ borderLeftColor: 'var(--border-strong, currentColor)' }}>
+        <div className={`rounded-2xl border border-border/70 bg-background/80 p-4 border-l-[4px] ${borderClass}`}>
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1 space-y-2">
                     <span className={['inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold', colors.shell].join(' ')}>

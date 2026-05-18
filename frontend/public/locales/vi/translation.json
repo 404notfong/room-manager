@@ -58,7 +58,9 @@
         "time": "lần",
         "months": "tháng",
         "optional": "Tùy chọn",
-        "actions": "Thao tác"
+        "actions": "Thao tác",
+        "previousMonth": "Tháng trước",
+        "nextMonth": "Tháng sau"
     },
     "errors": {
         "tooManyRequests": "Quá nhiều yêu cầu. Vui lòng thử lại sau {{seconds}} giây.",
@@ -795,11 +797,8 @@
     },
     "calendar": {
         "title": "Lịch",
-        "subtitle": "Xem lịch các sự kiện quan trọng",
         "noEvents": "Không có sự kiện",
-        "eventCount": "{{count}} sự kiện",
         "today": "Hôm nay",
-        "viewDay": "Xem chi tiết",
         "viewContract": "Xem hợp đồng",
         "viewInvoice": "Xem hóa đơn",
         "eventTypes": {
@@ -822,12 +821,7 @@
             "PAYMENT_DUE": "Tới kỳ thu",
             "PAYMENT_DUE_OVERDUE": "Quá hạn thanh toán"
         },
-        "daysLeft": "Còn {{days}} ngày",
-        "overdueDays": "Quá hạn {{days}} ngày",
-        "daysOverdueShort": "Quá {{days}} ngày",
-        "amount": "Số tiền",
         "loadingEvents": "Đang tải sự kiện",
-        "noEventsShort": "Không có lịch",
         "noEventsTitle": "Không có sự kiện",
         "overdue": {
             "bannerCount": "Bạn có {{count}} sự kiện quá hạn",
